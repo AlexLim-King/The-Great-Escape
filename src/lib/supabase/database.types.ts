@@ -73,6 +73,9 @@ export type Database = {
       missions: {
         Row: {
           created_at: string
+          deadline_at: string | null
+          deadline_duration_sec: number | null
+          deadline_mode: string | null
           description: string | null
           display_order: number
           expected_answer: string | null
@@ -86,6 +89,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deadline_at?: string | null
+          deadline_duration_sec?: number | null
+          deadline_mode?: string | null
           description?: string | null
           display_order?: number
           expected_answer?: string | null
@@ -99,6 +105,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deadline_at?: string | null
+          deadline_duration_sec?: number | null
+          deadline_mode?: string | null
           description?: string | null
           display_order?: number
           expected_answer?: string | null
@@ -234,18 +243,21 @@ export type Database = {
       team_mission_state: {
         Row: {
           completed_at: string | null
+          expires_at: string | null
           mission_id: string
           state: string
           team_id: string
         }
         Insert: {
           completed_at?: string | null
+          expires_at?: string | null
           mission_id: string
           state?: string
           team_id: string
         }
         Update: {
           completed_at?: string | null
+          expires_at?: string | null
           mission_id?: string
           state?: string
           team_id?: string
@@ -304,6 +316,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      expire_overdue_missions_for_game: {
+        Args: { p_game_id: string }
+        Returns: number
+      }
+      expire_overdue_missions_for_team: {
+        Args: { p_team_id: string }
+        Returns: number
+      }
       gen_join_code: { Args: never; Returns: string }
       recompute_team_mission_state: {
         Args: { p_team_id: string }

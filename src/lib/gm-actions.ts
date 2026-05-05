@@ -101,6 +101,47 @@ export async function createMission(formData: FormData) {
   const prereq_raw = (formData.get("prerequisite_mission_id") as string) || "";
   const prerequisite_mission_id = prereq_raw && prereq_raw !== "none" ? prereq_raw : null;
 
+  // Deadline fields
+  const deadline_mode_raw = (formData.get("deadline_mode") as string) || "none";
+  const deadline_mode =
+    deadline_mode_raw === "none"
+      ? null
+      : (deadline_mode_raw as
+          | "absolute"
+          | "relative_to_unlock"
+          | "relative_to_game_start");
+
+  let deadline_at: string | null = null;
+  let deadline_duration_sec: number | null = null;
+
+  if (deadline_mode === "absolute") {
+    const raw = (formData.get("deadline_at") as string) || "";
+    if (!raw) {
+      redirect(
+        `/games/${game_id}/missions/new?error=${encodeURIComponent(
+          "Absolute deadline needs a date/time.",
+        )}`,
+      );
+    }
+    deadline_at = new Date(raw).toISOString();
+  } else if (
+    deadline_mode === "relative_to_unlock" ||
+    deadline_mode === "relative_to_game_start"
+  ) {
+    const minutes = parseInt(
+      (formData.get("deadline_duration_min") as string) || "0",
+      10,
+    );
+    if (!minutes || minutes <= 0) {
+      redirect(
+        `/games/${game_id}/missions/new?error=${encodeURIComponent(
+          "Relative deadline needs a positive minute count.",
+        )}`,
+      );
+    }
+    deadline_duration_sec = minutes * 60;
+  }
+
   if (!title) redirect(`/games/${game_id}/missions/new?error=Title+required`);
 
   // Auto + text requires an expected answer
@@ -129,6 +170,9 @@ export async function createMission(formData: FormData) {
     validation_mode,
     expected_answer,
     prerequisite_mission_id,
+    deadline_mode,
+    deadline_at,
+    deadline_duration_sec,
   });
 
   if (error) {

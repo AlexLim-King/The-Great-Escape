@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { joinTeam, leaveTeam } from "@/lib/player-actions";
+import Countdown from "@/components/Countdown";
 
 export default async function PlayGamePage(
   props: PageProps<"/play/[code]">,
@@ -53,39 +54,53 @@ export default async function PlayGamePage(
     points: number;
     submission_type: "text" | "photo";
     state: string;
+    expires_at: string | null;
   }> = [];
   let totalPoints = 0;
 
   if (myTeamId) {
+    // Lazy expiry sweep — flips this team's overdue missions to failed_expired
+    // before we render so the player sees correct state.
+    await supabase.rpc("expire_overdue_missions_for_team", {
+      p_team_id: myTeamId,
+    });
+
     const [{ data: missions }, { data: states }] = await Promise.all([
       supabase
         .from("missions")
         .select(
-          "id, title, description, points, submission_type, validation_mode, prerequisite_mission_id, created_at",
+          "id, title, description, points, submission_type, validation_mode, prerequisite_mission_id, deadline_mode, created_at",
         )
         .eq("game_id", game.id)
         .order("created_at", { ascending: true }),
       supabase
         .from("team_mission_state")
-        .select("mission_id, state")
+        .select("mission_id, state, expires_at")
         .eq("team_id", myTeamId),
     ]);
 
     const stateMap = new Map(
-      (states ?? []).map((s) => [s.mission_id, s.state]),
+      (states ?? []).map((s) => [
+        s.mission_id,
+        { state: s.state, expires_at: s.expires_at },
+      ]),
     );
 
-    missionsView = (missions ?? []).map((m) => ({
-      id: m.id,
-      title: m.title,
-      description: m.description,
-      points: m.points,
-      submission_type: m.submission_type as "text" | "photo",
-      state: stateMap.get(m.id) ?? "locked",
-    }));
+    missionsView = (missions ?? []).map((m) => {
+      const s = stateMap.get(m.id);
+      return {
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        points: m.points,
+        submission_type: m.submission_type as "text" | "photo",
+        state: s?.state ?? "locked",
+        expires_at: s?.expires_at ?? null,
+      };
+    });
 
     totalPoints = (missions ?? []).reduce((sum, m) => {
-      return stateMap.get(m.id) === "approved" ? sum + m.points : sum;
+      return stateMap.get(m.id)?.state === "approved" ? sum + m.points : sum;
     }, 0);
   }
 
@@ -185,6 +200,7 @@ export default async function PlayGamePage(
                 const completed = m.state === "approved";
                 const submitted = m.state === "submitted";
                 const rejected = m.state === "rejected";
+                const failed = m.state === "failed_expired";
 
                 const pill = (() => {
                   if (locked)
@@ -207,6 +223,11 @@ export default async function PlayGamePage(
                       label: "✗ Try again",
                       cls: "bg-red-600/20 text-red-700 dark:text-red-300",
                     };
+                  if (failed)
+                    return {
+                      label: "⌛ Time's up",
+                      cls: "bg-red-700/20 text-red-700 dark:text-red-400",
+                    };
                   return {
                     label: "Open",
                     cls: "bg-blue-600/20 text-blue-700 dark:text-blue-300",
@@ -222,8 +243,13 @@ export default async function PlayGamePage(
                           {m.description}
                         </p>
                       )}
-                      <p className="text-xs text-black/50 dark:text-white/50 mt-1">
-                        {m.points} pts · {m.submission_type}
+                      <p className="text-xs text-black/50 dark:text-white/50 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>
+                          {m.points} pts · {m.submission_type}
+                        </span>
+                        {m.expires_at && !completed && !failed && (
+                          <Countdown expiresAt={m.expires_at} />
+                        )}
                       </p>
                     </div>
                     <span
@@ -236,7 +262,7 @@ export default async function PlayGamePage(
 
                 const baseCls =
                   "block rounded border border-black/10 dark:border-white/10 p-3";
-                if (locked || completed || submitted) {
+                if (locked || completed || submitted || failed) {
                   return (
                     <li key={m.id} className={`${baseCls} opacity-80`}>
                       {inner}

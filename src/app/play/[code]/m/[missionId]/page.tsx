@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitTextAnswer, submitPhoto } from "@/lib/player-actions";
+import Countdown from "@/components/Countdown";
 
 export default async function SubmitMissionPage(
   props: PageProps<"/play/[code]/m/[missionId]">,
@@ -50,10 +51,15 @@ export default async function SubmitMissionPage(
 
   if (!myTeamId) redirect(`/play/${code}`);
 
+  // Lazy expiry sweep before reading state
+  await supabase.rpc("expire_overdue_missions_for_team", {
+    p_team_id: myTeamId,
+  });
+
   // Check mission state for the team
   const { data: state } = await supabase
     .from("team_mission_state")
-    .select("state")
+    .select("state, expires_at")
     .eq("team_id", myTeamId)
     .eq("mission_id", missionId)
     .maybeSingle();
@@ -62,6 +68,8 @@ export default async function SubmitMissionPage(
     redirect(`/play/${code}?error=Mission+not+available`);
   if (state.state === "approved" || state.state === "submitted")
     redirect(`/play/${code}`);
+  if (state.state === "failed_expired")
+    redirect(`/play/${code}?error=${encodeURIComponent("That mission's deadline has passed.")}`);
 
   return (
     <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8">
@@ -74,11 +82,14 @@ export default async function SubmitMissionPage(
           {mission.description}
         </p>
       )}
-      <p className="text-xs text-black/50 dark:text-white/50 mt-1">
-        {mission.points} pts ·{" "}
-        {mission.validation_mode === "auto"
-          ? "auto-checked"
-          : "GM judged"}
+      <p className="text-xs text-black/50 dark:text-white/50 mt-1 flex items-center gap-2 flex-wrap">
+        <span>
+          {mission.points} pts ·{" "}
+          {mission.validation_mode === "auto" ? "auto-checked" : "GM judged"}
+        </span>
+        {state.expires_at && (
+          <Countdown expiresAt={state.expires_at} />
+        )}
       </p>
 
       {error && (

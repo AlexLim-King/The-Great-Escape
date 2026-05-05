@@ -54,6 +54,31 @@ export async function leaveTeam(formData: FormData) {
   redirect(`/play/${join_code}`);
 }
 
+async function ensureMissionSubmittable(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  team_id: string,
+  mission_id: string,
+  join_code: string,
+) {
+  // Sweep any overdue missions for this team first
+  await supabase.rpc("expire_overdue_missions_for_team", { p_team_id: team_id });
+
+  const { data: state } = await supabase
+    .from("team_mission_state")
+    .select("state")
+    .eq("team_id", team_id)
+    .eq("mission_id", mission_id)
+    .maybeSingle();
+
+  if (!state || state.state !== "unlocked") {
+    const reason =
+      state?.state === "failed_expired"
+        ? "That mission's deadline has passed."
+        : "Mission is not available.";
+    redirect(`/play/${join_code}?error=${encodeURIComponent(reason)}`);
+  }
+}
+
 export async function submitTextAnswer(formData: FormData) {
   const { supabase, user } = await requireUser();
 
@@ -67,6 +92,8 @@ export async function submitTextAnswer(formData: FormData) {
       `/play/${join_code}/m/${mission_id}?error=Answer+cannot+be+empty`,
     );
   }
+
+  await ensureMissionSubmittable(supabase, team_id, mission_id, join_code);
 
   const { error } = await supabase.from("submissions").insert({
     mission_id,
@@ -98,6 +125,8 @@ export async function submitPhoto(formData: FormData) {
       `/play/${join_code}/m/${mission_id}?error=Please+pick+a+photo`,
     );
   }
+
+  await ensureMissionSubmittable(supabase, team_id, mission_id, join_code);
 
   // Look up game_id for path namespacing
   const { data: team } = await supabase

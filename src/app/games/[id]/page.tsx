@@ -37,11 +37,15 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
     supabase
       .from("missions")
       .select(
-        "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, created_at",
+        "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, created_at",
       )
       .eq("game_id", id)
       .order("created_at", { ascending: true }),
   ]);
+
+  // Lazy expiry sweep — flips overdue unlocked missions to failed_expired
+  // before we render so the dashboard counts and statuses are accurate.
+  await supabase.rpc("expire_overdue_missions_for_game", { p_game_id: id });
 
   // Pending submissions across all missions in this game
   const { data: pending } = await supabase
@@ -205,6 +209,18 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                           <span className="italic">
                             {missionTitleById.get(m.prerequisite_mission_id) ??
                               "?"}
+                          </span>
+                        </>
+                      )}
+                      {m.deadline_mode && (
+                        <>
+                          {" "}·{" "}
+                          <span className="text-amber-700 dark:text-amber-300">
+                            {m.deadline_mode === "absolute"
+                              ? `until ${m.deadline_at ? new Date(m.deadline_at).toLocaleString() : "?"}`
+                              : m.deadline_mode === "relative_to_unlock"
+                                ? `${Math.round((m.deadline_duration_sec ?? 0) / 60)} min after unlock`
+                                : `${Math.round((m.deadline_duration_sec ?? 0) / 60)} min from start`}
                           </span>
                         </>
                       )}
