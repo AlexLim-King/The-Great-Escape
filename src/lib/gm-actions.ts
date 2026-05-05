@@ -94,12 +94,27 @@ export async function createMission(formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   const description = ((formData.get("description") as string) ?? "").trim();
   const points = parseInt((formData.get("points") as string) || "10", 10);
-  const submission_type = formData.get("submission_type") as "text" | "photo";
+  const submission_type = formData.get("submission_type") as
+    | "text"
+    | "photo"
+    | "video";
   const validation_mode = formData.get("validation_mode") as "auto" | "gm_judged";
   const expected_answer =
     ((formData.get("expected_answer") as string) ?? "").trim() || null;
   const prereq_raw = (formData.get("prerequisite_mission_id") as string) || "";
   const prerequisite_mission_id = prereq_raw && prereq_raw !== "none" ? prereq_raw : null;
+
+  // Assignment
+  const assignment_mode = (formData.get("assignment_mode") as
+    | "all"
+    | "specific") || "all";
+  const team_ids =
+    assignment_mode === "specific"
+      ? (formData.getAll("team_ids") as string[]).filter(Boolean)
+      : [];
+
+  // Reference image
+  const reference_image = formData.get("reference_image") as File | null;
 
   // Deadline fields
   const deadline_mode_raw = (formData.get("deadline_mode") as string) || "none";
@@ -152,34 +167,94 @@ export async function createMission(formData: FormData) {
       )}`,
     );
   }
-  // Photo missions cannot be auto (need GM judging)
-  if (submission_type === "photo" && validation_mode === "auto") {
+  // Photo / video missions must be GM-judged (no auto path)
+  if (
+    (submission_type === "photo" || submission_type === "video") &&
+    validation_mode === "auto"
+  ) {
     redirect(
       `/games/${game_id}/missions/new?error=${encodeURIComponent(
-        "Photo missions must be GM-judged.",
+        "Photo and video missions must be GM-judged.",
+      )}`,
+    );
+  }
+  // Specific assignment must include at least one team
+  if (assignment_mode === "specific" && team_ids.length === 0) {
+    redirect(
+      `/games/${game_id}/missions/new?error=${encodeURIComponent(
+        "Pick at least one team or switch to 'All teams'.",
       )}`,
     );
   }
 
-  const { error } = await supabase.from("missions").insert({
-    game_id,
-    title,
-    description: description || null,
-    points,
-    submission_type,
-    validation_mode,
-    expected_answer,
-    prerequisite_mission_id,
-    deadline_mode,
-    deadline_at,
-    deadline_duration_sec,
-  });
+  const { data: inserted, error } = await supabase
+    .from("missions")
+    .insert({
+      game_id,
+      title,
+      description: description || null,
+      points,
+      submission_type,
+      validation_mode,
+      expected_answer,
+      prerequisite_mission_id,
+      deadline_mode,
+      deadline_at,
+      deadline_duration_sec,
+      assignment_mode,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !inserted) {
     redirect(
-      `/games/${game_id}/missions/new?error=${encodeURIComponent(error.message)}`,
+      `/games/${game_id}/missions/new?error=${encodeURIComponent(error?.message ?? "Insert failed")}`,
     );
   }
+
+  // Reference image upload (best-effort — failure rolls the mission back)
+  if (reference_image && reference_image.size > 0) {
+    const ext = (reference_image.name.split(".").pop() || "jpg")
+      .toLowerCase()
+      .slice(0, 4);
+    const path = `mission-media/${game_id}/${inserted.id}/ref-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("submissions")
+      .upload(path, reference_image, {
+        contentType: reference_image.type || "image/jpeg",
+      });
+    if (upErr) {
+      // Roll back the mission so the GM can retry cleanly
+      await supabase.from("missions").delete().eq("id", inserted.id);
+      redirect(
+        `/games/${game_id}/missions/new?error=${encodeURIComponent("Image upload failed: " + upErr.message)}`,
+      );
+    }
+    await supabase
+      .from("missions")
+      .update({ reference_image_path: path })
+      .eq("id", inserted.id);
+  }
+
+  // Specific-team assignments
+  if (assignment_mode === "specific" && team_ids.length > 0) {
+    const rows = team_ids.map((tid) => ({
+      mission_id: inserted.id,
+      team_id: tid,
+    }));
+    const { error: aErr } = await supabase
+      .from("mission_team_assignments")
+      .insert(rows);
+    if (aErr) {
+      // Mission was already created — surface the error but don't roll back
+      redirect(
+        `/games/${game_id}?error=${encodeURIComponent(
+          "Mission created but assignments failed: " + aErr.message,
+        )}`,
+      );
+    }
+  }
+
   revalidatePath(`/games/${game_id}`);
   redirect(`/games/${game_id}`);
 }

@@ -70,8 +70,42 @@ export type Database = {
         }
         Relationships: []
       }
+      mission_team_assignments: {
+        Row: {
+          created_at: string
+          mission_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          mission_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          mission_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_team_assignments_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mission_team_assignments_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       missions: {
         Row: {
+          assignment_mode: string
           created_at: string
           deadline_at: string | null
           deadline_duration_sec: number | null
@@ -83,11 +117,13 @@ export type Database = {
           id: string
           points: number
           prerequisite_mission_id: string | null
+          reference_image_path: string | null
           submission_type: string
           title: string
           validation_mode: string
         }
         Insert: {
+          assignment_mode?: string
           created_at?: string
           deadline_at?: string | null
           deadline_duration_sec?: number | null
@@ -99,11 +135,13 @@ export type Database = {
           id?: string
           points?: number
           prerequisite_mission_id?: string | null
+          reference_image_path?: string | null
           submission_type: string
           title: string
           validation_mode: string
         }
         Update: {
+          assignment_mode?: string
           created_at?: string
           deadline_at?: string | null
           deadline_duration_sec?: number | null
@@ -115,6 +153,7 @@ export type Database = {
           id?: string
           points?: number
           prerequisite_mission_id?: string | null
+          reference_image_path?: string | null
           submission_type?: string
           title?: string
           validation_mode?: string

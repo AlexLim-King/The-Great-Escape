@@ -112,17 +112,19 @@ export async function submitTextAnswer(formData: FormData) {
   redirect(`/play/${join_code}`);
 }
 
-export async function submitPhoto(formData: FormData) {
+export async function submitMedia(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const mission_id = formData.get("mission_id") as string;
   const team_id = formData.get("team_id") as string;
   const join_code = formData.get("join_code") as string;
-  const file = formData.get("photo") as File | null;
+  const media_kind =
+    (formData.get("media_kind") as "photo" | "video") || "photo";
+  const file = formData.get("media") as File | null;
 
   if (!file || file.size === 0) {
     redirect(
-      `/play/${join_code}/m/${mission_id}?error=Please+pick+a+photo`,
+      `/play/${join_code}/m/${mission_id}?error=Please+pick+a+${media_kind === "video" ? "video" : "photo"}`,
     );
   }
 
@@ -138,12 +140,16 @@ export async function submitPhoto(formData: FormData) {
     redirect(`/play/${join_code}/m/${mission_id}?error=Team+not+found`);
   }
 
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 4);
+  const fallbackExt = media_kind === "video" ? "mp4" : "jpg";
+  const fallbackMime = media_kind === "video" ? "video/mp4" : "image/jpeg";
+  const ext = (file.name.split(".").pop() || fallbackExt)
+    .toLowerCase()
+    .slice(0, 4);
   const path = `${team.game_id}/${team_id}/${mission_id}/${Date.now()}-${user.id.slice(0, 8)}.${ext}`;
 
   const { error: upErr } = await supabase.storage
     .from("submissions")
-    .upload(path, file, { contentType: file.type || "image/jpeg" });
+    .upload(path, file, { contentType: file.type || fallbackMime });
 
   if (upErr) {
     redirect(

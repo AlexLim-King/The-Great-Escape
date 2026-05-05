@@ -37,7 +37,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
     supabase
       .from("missions")
       .select(
-        "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, created_at",
+        "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, assignment_mode, reference_image_path, created_at, mission_team_assignments(team_id)",
       )
       .eq("game_id", id)
       .order("created_at", { ascending: true }),
@@ -47,11 +47,24 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   // before we render so the dashboard counts and statuses are accurate.
   await supabase.rpc("expire_overdue_missions_for_game", { p_game_id: id });
 
+  // Generate signed URLs for any mission reference images
+  const referenceUrls = new Map<string, string>();
+  if (missions) {
+    for (const m of missions) {
+      if (m.reference_image_path) {
+        const { data } = await supabase.storage
+          .from("submissions")
+          .createSignedUrl(m.reference_image_path, 60 * 60);
+        if (data?.signedUrl) referenceUrls.set(m.id, data.signedUrl);
+      }
+    }
+  }
+
   // Pending submissions across all missions in this game
   const { data: pending } = await supabase
     .from("submissions")
     .select(
-      "id, status, payload_text, media_path, created_at, mission_id, team_id, missions!inner(title, game_id), teams!inner(name, color)",
+      "id, status, payload_text, media_path, created_at, mission_id, team_id, missions!inner(title, game_id, submission_type), teams!inner(name, color)",
     )
     .eq("missions.game_id", id)
     .eq("status", "pending")
@@ -197,11 +210,29 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                 key={m.id}
                 className="rounded border border-black/10 dark:border-white/10 p-3"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  {referenceUrls.get(m.id) && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={referenceUrls.get(m.id)!}
+                      alt=""
+                      className="w-16 h-16 object-cover rounded border border-black/10 dark:border-white/10 flex-none"
+                    />
+                  )}
+                  <div className="flex-1">
                     <p className="font-medium">{m.title}</p>
                     <p className="text-xs text-black/60 dark:text-white/60 mt-0.5">
                       {m.submission_type} · {m.validation_mode} · {m.points} pts
+                      {" · "}
+                      <span className="text-blue-700 dark:text-blue-300">
+                        {m.assignment_mode === "all"
+                          ? "all teams"
+                          : `${m.mission_team_assignments?.length ?? 0} team${
+                              (m.mission_team_assignments?.length ?? 0) === 1
+                                ? ""
+                                : "s"
+                            }`}
+                      </span>
                       {m.prerequisite_mission_id && (
                         <>
                           {" "}
@@ -280,12 +311,20 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
 
                   {s.media_path && signedUrls.get(s.id) && (
                     <div className="mt-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={signedUrls.get(s.id)!}
-                        alt="Submission"
-                        className="max-h-64 rounded border border-black/10 dark:border-white/10"
-                      />
+                      {mission?.submission_type === "video" ? (
+                        <video
+                          src={signedUrls.get(s.id)!}
+                          controls
+                          className="max-h-64 rounded border border-black/10 dark:border-white/10"
+                        />
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={signedUrls.get(s.id)!}
+                          alt="Submission"
+                          className="max-h-64 rounded border border-black/10 dark:border-white/10"
+                        />
+                      )}
                     </div>
                   )}
 

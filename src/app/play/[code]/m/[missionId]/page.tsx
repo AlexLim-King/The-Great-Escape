@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { submitTextAnswer, submitPhoto } from "@/lib/player-actions";
+import { submitTextAnswer, submitMedia } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
 
 export default async function SubmitMissionPage(
@@ -26,7 +26,9 @@ export default async function SubmitMissionPage(
 
   const { data: mission } = await supabase
     .from("missions")
-    .select("id, title, description, points, submission_type, validation_mode, game_id")
+    .select(
+      "id, title, description, points, submission_type, validation_mode, reference_image_path, game_id",
+    )
     .eq("id", missionId)
     .single();
   if (!mission || mission.game_id !== game.id) notFound();
@@ -71,6 +73,19 @@ export default async function SubmitMissionPage(
   if (state.state === "failed_expired")
     redirect(`/play/${code}?error=${encodeURIComponent("That mission's deadline has passed.")}`);
 
+  // Reference image (signed URL, valid for 1 hour)
+  let referenceUrl: string | null = null;
+  if (mission.reference_image_path) {
+    const { data } = await supabase.storage
+      .from("submissions")
+      .createSignedUrl(mission.reference_image_path, 60 * 60);
+    referenceUrl = data?.signedUrl ?? null;
+  }
+
+  const isPhoto = mission.submission_type === "photo";
+  const isVideo = mission.submission_type === "video";
+  const isMedia = isPhoto || isVideo;
+
   return (
     <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8">
       <Link href={`/play/${code}`} className="text-sm hover:underline">
@@ -87,10 +102,17 @@ export default async function SubmitMissionPage(
           {mission.points} pts ·{" "}
           {mission.validation_mode === "auto" ? "auto-checked" : "GM judged"}
         </span>
-        {state.expires_at && (
-          <Countdown expiresAt={state.expires_at} />
-        )}
+        {state.expires_at && <Countdown expiresAt={state.expires_at} />}
       </p>
+
+      {referenceUrl && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={referenceUrl}
+          alt="Mission reference"
+          className="mt-4 w-full rounded border border-black/10 dark:border-white/10"
+        />
+      )}
 
       {error && (
         <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mt-4">
@@ -119,34 +141,46 @@ export default async function SubmitMissionPage(
             Submit answer
           </button>
         </form>
-      ) : (
+      ) : isMedia ? (
         <form
-          action={submitPhoto}
+          action={submitMedia}
           className="mt-6 space-y-3"
           encType="multipart/form-data"
         >
           <input type="hidden" name="mission_id" value={mission.id} />
           <input type="hidden" name="team_id" value={myTeamId} />
           <input type="hidden" name="join_code" value={code} />
+          <input
+            type="hidden"
+            name="media_kind"
+            value={isPhoto ? "photo" : "video"}
+          />
           <label className="block">
-            <span className="text-sm">Take or upload a photo</span>
+            <span className="text-sm">
+              {isPhoto ? "Take or upload a photo" : "Record or upload a video"}
+            </span>
             <input
-              name="photo"
+              name="media"
               type="file"
-              accept="image/*"
+              accept={isPhoto ? "image/*" : "video/*"}
               capture="environment"
               required
               className="mt-1 block w-full text-sm"
             />
+            {isVideo && (
+              <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
+                Keep it under ~60 seconds and 100 MB.
+              </span>
+            )}
           </label>
           <button
             type="submit"
             className="rounded bg-foreground text-background px-4 py-2 font-medium"
           >
-            Submit photo
+            {isPhoto ? "Submit photo" : "Submit video"}
           </button>
         </form>
-      )}
+      ) : null}
     </main>
   );
 }

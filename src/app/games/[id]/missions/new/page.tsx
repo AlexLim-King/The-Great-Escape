@@ -24,11 +24,18 @@ export default async function NewMissionPage(
   if (!game) notFound();
   if (game.owner_id !== user.id) redirect("/games");
 
-  const { data: missions } = await supabase
-    .from("missions")
-    .select("id, title")
-    .eq("game_id", id)
-    .order("created_at", { ascending: true });
+  const [{ data: missions }, { data: teams }] = await Promise.all([
+    supabase
+      .from("missions")
+      .select("id, title")
+      .eq("game_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("teams")
+      .select("id, name, color")
+      .eq("game_id", id)
+      .order("created_at", { ascending: true }),
+  ]);
 
   return (
     <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8">
@@ -46,7 +53,11 @@ export default async function NewMissionPage(
         </p>
       )}
 
-      <MissionForm gameId={game.id} missions={missions ?? []} />
+      <MissionForm
+        gameId={game.id}
+        missions={missions ?? []}
+        teams={teams ?? []}
+      />
     </main>
   );
 }

@@ -52,7 +52,7 @@ export default async function PlayGamePage(
     title: string;
     description: string | null;
     points: number;
-    submission_type: "text" | "photo";
+    submission_type: "text" | "photo" | "video";
     state: string;
     expires_at: string | null;
   }> = [];
@@ -65,19 +65,36 @@ export default async function PlayGamePage(
       p_team_id: myTeamId,
     });
 
-    const [{ data: missions }, { data: states }] = await Promise.all([
+    // Filter by assignment scope: a mission shows up either if it targets
+    // every team OR if it has a specific assignment to *this* team.
+    const missionCols =
+      "id, title, description, points, submission_type, validation_mode, prerequisite_mission_id, deadline_mode, created_at";
+    const [
+      { data: missionsAll },
+      { data: missionsSpecific },
+      { data: states },
+    ] = await Promise.all([
       supabase
         .from("missions")
-        .select(
-          "id, title, description, points, submission_type, validation_mode, prerequisite_mission_id, deadline_mode, created_at",
-        )
+        .select(missionCols)
         .eq("game_id", game.id)
-        .order("created_at", { ascending: true }),
+        .eq("assignment_mode", "all"),
+      supabase
+        .from("missions")
+        .select(`${missionCols}, mission_team_assignments!inner(team_id)`)
+        .eq("game_id", game.id)
+        .eq("assignment_mode", "specific")
+        .eq("mission_team_assignments.team_id", myTeamId),
       supabase
         .from("team_mission_state")
         .select("mission_id, state, expires_at")
         .eq("team_id", myTeamId),
     ]);
+
+    const missions = [...(missionsAll ?? []), ...(missionsSpecific ?? [])].sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
 
     const stateMap = new Map(
       (states ?? []).map((s) => [
@@ -86,20 +103,20 @@ export default async function PlayGamePage(
       ]),
     );
 
-    missionsView = (missions ?? []).map((m) => {
+    missionsView = missions.map((m) => {
       const s = stateMap.get(m.id);
       return {
         id: m.id,
         title: m.title,
         description: m.description,
         points: m.points,
-        submission_type: m.submission_type as "text" | "photo",
+        submission_type: m.submission_type as "text" | "photo" | "video",
         state: s?.state ?? "locked",
         expires_at: s?.expires_at ?? null,
       };
     });
 
-    totalPoints = (missions ?? []).reduce((sum, m) => {
+    totalPoints = missions.reduce((sum, m) => {
       return stateMap.get(m.id)?.state === "approved" ? sum + m.points : sum;
     }, 0);
   }
