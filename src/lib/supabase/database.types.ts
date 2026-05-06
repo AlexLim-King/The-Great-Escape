@@ -195,6 +195,7 @@ export type Database = {
       }
       submissions: {
         Row: {
+          bonus_points: number
           created_at: string
           feedback: string | null
           id: string
@@ -208,6 +209,7 @@ export type Database = {
           verified_by: string | null
         }
         Insert: {
+          bonus_points?: number
           created_at?: string
           feedback?: string | null
           id?: string
@@ -221,6 +223,7 @@ export type Database = {
           verified_by?: string | null
         }
         Update: {
+          bonus_points?: number
           created_at?: string
           feedback?: string | null
           id?: string
@@ -281,6 +284,7 @@ export type Database = {
       }
       team_mission_state: {
         Row: {
+          bonus_points: number
           completed_at: string | null
           expires_at: string | null
           mission_id: string
@@ -288,6 +292,7 @@ export type Database = {
           team_id: string
         }
         Insert: {
+          bonus_points?: number
           completed_at?: string | null
           expires_at?: string | null
           mission_id: string
@@ -295,6 +300,7 @@ export type Database = {
           team_id: string
         }
         Update: {
+          bonus_points?: number
           completed_at?: string | null
           expires_at?: string | null
           mission_id?: string

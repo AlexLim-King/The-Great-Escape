@@ -313,17 +313,49 @@ export async function judgeSubmission(formData: FormData) {
   const game_id = formData.get("game_id") as string;
   const decision = formData.get("decision") as "approved" | "rejected";
   const feedback = ((formData.get("feedback") as string) ?? "").trim() || null;
+  const tab = ((formData.get("tab") as string) ?? "").trim();
+
+  // Bonus only meaningful on approve; clamp to >= 0
+  const bonusRaw = (formData.get("bonus_points") as string) ?? "0";
+  const bonus = Math.max(0, parseInt(bonusRaw, 10) || 0);
 
   await supabase
     .from("submissions")
     .update({
       status: decision,
       feedback,
+      bonus_points: decision === "approved" ? bonus : 0,
       verified_by: user.id,
       verified_at: new Date().toISOString(),
     })
     .eq("id", id);
 
   revalidatePath(`/games/${game_id}`);
-  redirect(`/games/${game_id}`);
+  redirect(tab ? `/games/${game_id}?tab=${tab}` : `/games/${game_id}`);
+}
+
+/**
+ * Edit the bonus on an already-approved submission without changing its
+ * status. The DB trigger mirrors the new value to team_mission_state, so
+ * the leaderboard refreshes via realtime.
+ */
+export async function updateSubmissionBonus(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = formData.get("id") as string;
+  const game_id = formData.get("game_id") as string;
+  const tab = ((formData.get("tab") as string) ?? "approved").trim();
+
+  const bonus = Math.max(
+    0,
+    parseInt((formData.get("bonus_points") as string) || "0", 10) || 0,
+  );
+
+  await supabase
+    .from("submissions")
+    .update({ bonus_points: bonus })
+    .eq("id", id)
+    .eq("status", "approved");
+
+  revalidatePath(`/games/${game_id}`);
+  redirect(`/games/${game_id}?tab=${tab}`);
 }
