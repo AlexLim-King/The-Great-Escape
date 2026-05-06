@@ -106,11 +106,7 @@ export default function MissionForm({
   const initialTeamIdSet = new Set(initialTeamIds ?? []);
 
   return (
-    <form
-      action={action}
-      encType="multipart/form-data"
-      className="space-y-4"
-    >
+    <form action={action} className="space-y-4">
       <input type="hidden" name="game_id" value={gameId} />
       {missionId && (
         <input type="hidden" name="mission_id" value={missionId} />

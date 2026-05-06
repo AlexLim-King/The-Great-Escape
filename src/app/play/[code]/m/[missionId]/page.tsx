@@ -143,11 +143,7 @@ export default async function SubmitMissionPage(
           </button>
         </form>
       ) : isMedia ? (
-        <form
-          action={submitMedia}
-          className="mt-6 space-y-4"
-          encType="multipart/form-data"
-        >
+        <form action={submitMedia} className="mt-6 space-y-4">
           <input type="hidden" name="mission_id" value={mission.id} />
           <input type="hidden" name="team_id" value={myTeamId} />
           <input type="hidden" name="join_code" value={code} />
