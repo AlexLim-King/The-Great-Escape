@@ -5,10 +5,14 @@ import {
   createTeam,
   deleteTeam,
   deleteMission,
+  reorderMissions,
   deleteGame,
   setTeamPassword,
 } from "@/lib/gm-actions";
 import TabNav from "@/components/TabNav";
+import SortableMissionList, {
+  type SortableMission,
+} from "@/components/SortableMissionList";
 
 export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const { id } = await props.params;
@@ -42,9 +46,10 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
       supabase
         .from("missions")
         .select(
-          "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, assignment_mode, reference_image_path, created_at, mission_team_assignments(team_id)",
+          "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, assignment_mode, reference_image_path, display_order, created_at, mission_team_assignments(team_id)",
         )
         .eq("game_id", id)
+        .order("display_order", { ascending: true })
         .order("created_at", { ascending: true }),
       supabase
         .from("submissions")
@@ -69,6 +74,25 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const missionTitleById = new Map(
     (missions ?? []).map((m) => [m.id, m.title]),
   );
+
+  // Shape the missions for the SortableMissionList client component.
+  // Generated DB types widen enum-like text columns to plain string;
+  // CHECK constraints guarantee the runtime values, so narrow here.
+  const sortableMissions: SortableMission[] = (missions ?? []).map((m) => ({
+    id: m.id,
+    title: m.title,
+    description: m.description,
+    points: m.points,
+    submission_type: m.submission_type as SortableMission["submission_type"],
+    validation_mode: m.validation_mode as SortableMission["validation_mode"],
+    prerequisite_mission_id: m.prerequisite_mission_id,
+    deadline_mode: m.deadline_mode as SortableMission["deadline_mode"],
+    deadline_at: m.deadline_at,
+    deadline_duration_sec: m.deadline_duration_sec,
+    assignment_mode: m.assignment_mode as SortableMission["assignment_mode"],
+    assignment_count: m.mission_team_assignments?.length ?? 0,
+    reference_url: referenceUrls.get(m.id) ?? null,
+  }));
 
   return (
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 space-y-8">
@@ -236,95 +260,13 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
           </Link>
         </div>
 
-        {missions && missions.length > 0 ? (
-          <ul className="space-y-2">
-            {missions.map((m) => (
-              <li
-                key={m.id}
-                className="rounded border border-black/10 dark:border-white/10 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  {referenceUrls.get(m.id) && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={referenceUrls.get(m.id)!}
-                      alt=""
-                      className="w-16 h-16 object-cover rounded border border-black/10 dark:border-white/10 flex-none"
-                    />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-medium">{m.title}</p>
-                    <p className="text-xs text-black/60 dark:text-white/60 mt-0.5">
-                      {m.submission_type} · {m.validation_mode} · {m.points} pts
-                      {" · "}
-                      <span className="text-blue-700 dark:text-blue-300">
-                        {m.assignment_mode === "all"
-                          ? "all teams"
-                          : `${m.mission_team_assignments?.length ?? 0} team${
-                              (m.mission_team_assignments?.length ?? 0) === 1
-                                ? ""
-                                : "s"
-                            }`}
-                      </span>
-                      {m.prerequisite_mission_id && (
-                        <>
-                          {" "}
-                          · requires{" "}
-                          <span className="italic">
-                            {missionTitleById.get(m.prerequisite_mission_id) ??
-                              "?"}
-                          </span>
-                        </>
-                      )}
-                      {m.deadline_mode && (
-                        <>
-                          {" "}
-                          ·{" "}
-                          <span className="text-amber-700 dark:text-amber-300">
-                            {m.deadline_mode === "absolute"
-                              ? `until ${m.deadline_at ? new Date(m.deadline_at).toLocaleString() : "?"}`
-                              : m.deadline_mode === "relative_to_unlock"
-                                ? `${Math.round((m.deadline_duration_sec ?? 0) / 60)} min after unlock`
-                                : `${Math.round((m.deadline_duration_sec ?? 0) / 60)} min from start`}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                    {m.description && (
-                      <p className="text-sm mt-1">{m.description}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <Link
-                      href={`/games/${game.id}/missions/${m.id}/edit`}
-                      className="text-sm hover:underline"
-                    >
-                      Edit
-                    </Link>
-                    <form action={deleteMission}>
-                      <input type="hidden" name="id" value={m.id} />
-                      <input
-                        type="hidden"
-                        name="game_id"
-                        value={game.id}
-                      />
-                      <button
-                        type="submit"
-                        className="text-sm text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-black/60 dark:text-white/60">
-            No missions yet.
-          </p>
-        )}
+        <SortableMissionList
+          gameId={game.id}
+          initial={sortableMissions}
+          missionTitleById={Object.fromEntries(missionTitleById)}
+          reorderMissions={reorderMissions}
+          deleteMission={deleteMission}
+        />
       </section>
     </main>
   );

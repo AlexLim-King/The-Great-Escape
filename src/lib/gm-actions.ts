@@ -206,6 +206,18 @@ export async function createMission(formData: FormData) {
     deadline_duration_sec = minutes * 60;
   }
 
+  // New missions get appended to the end of the existing display order.
+  // Using (max + 1) keeps positions distinct so reordering has stable
+  // edges to drop into.
+  const { data: lastOrderRow } = await supabase
+    .from("missions")
+    .select("display_order")
+    .eq("game_id", game_id)
+    .order("display_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const display_order = (lastOrderRow?.display_order ?? -1) + 1;
+
   if (!title) redirect(`/games/${game_id}/missions/new?error=Title+required`);
 
   // Auto + text requires an expected answer
@@ -251,6 +263,7 @@ export async function createMission(formData: FormData) {
       deadline_at,
       deadline_duration_sec,
       assignment_mode,
+      display_order,
     })
     .select("id")
     .single();
@@ -552,6 +565,29 @@ export async function deleteMission(formData: FormData) {
   await supabase.from("missions").delete().eq("id", id);
   revalidatePath(`/games/${game_id}`);
   redirect(`/games/${game_id}`);
+}
+
+/**
+ * Reorder all missions in a game in a single atomic call.
+ *
+ * `orderedMissionIds` is the new full ordering (top-to-bottom). The RPC
+ * does authorization (must be GM) and a single UPDATE with a values-from-
+ * unnest join, so partial reorders never leak.
+ *
+ * Designed to be called directly from a client component without going
+ * through a <form>, so this takes plain arguments instead of FormData.
+ */
+export async function reorderMissions(
+  gameId: string,
+  orderedMissionIds: string[],
+) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("reorder_missions", {
+    p_game_id: gameId,
+    p_ids: orderedMissionIds,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/games/${gameId}`);
 }
 
 // ── Judging ──────────────────────────────────────────────────────────────────

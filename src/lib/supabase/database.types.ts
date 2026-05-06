@@ -395,6 +395,10 @@ export type Database = {
         Args: { p_team_id: string }
         Returns: undefined
       }
+      reorder_missions: {
+        Args: { p_game_id: string; p_ids: string[] }
+        Returns: undefined
+      }
       set_team_password: {
         Args: { p_password: string; p_team_id: string }
         Returns: undefined

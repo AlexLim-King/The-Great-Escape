@@ -66,9 +66,14 @@ export default function MissionInspector({
       <dialog
         ref={dialogRef}
         // Reset native dialog styling and use Tailwind to position the card.
+        // The text-foreground here is critical: <dialog> in the top layer
+        // gets a user-agent default `color: CanvasText` that doesn't
+        // inherit from <body>, so without an explicit color all text
+        // inside renders dark in dark mode (black-on-black). Setting it
+        // on the dialog lets every descendant inherit cleanly.
         // backdrop:* targets the ::backdrop pseudo for the dimmed overlay.
         className="
-          m-auto p-0 bg-transparent
+          m-auto p-0 bg-transparent text-foreground
           backdrop:bg-black/50 backdrop:backdrop-blur-sm
           max-w-lg w-[calc(100%-2rem)]
           open:animate-in
