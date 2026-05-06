@@ -308,6 +308,243 @@ export async function createMission(formData: FormData) {
   redirect(`/games/${game_id}`);
 }
 
+export async function updateMission(formData: FormData) {
+  const { supabase } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const mission_id = formData.get("mission_id") as string;
+
+  if (!mission_id) {
+    redirect(`/games/${game_id}?error=Missing+mission+id`);
+  }
+
+  // Same parsing as createMission ─────────────────────────────────────────
+  const title = (formData.get("title") as string)?.trim();
+  const description = ((formData.get("description") as string) ?? "").trim();
+  const points = parseInt((formData.get("points") as string) || "10", 10);
+  const submission_type = formData.get("submission_type") as
+    | "text"
+    | "photo"
+    | "video";
+  const validation_mode = formData.get("validation_mode") as
+    | "auto"
+    | "gm_judged";
+  const expected_answer =
+    ((formData.get("expected_answer") as string) ?? "").trim() || null;
+  const prereq_raw = (formData.get("prerequisite_mission_id") as string) || "";
+  const prerequisite_mission_id =
+    prereq_raw && prereq_raw !== "none" ? prereq_raw : null;
+
+  const assignment_mode =
+    ((formData.get("assignment_mode") as "all" | "specific") || "all");
+  const team_ids =
+    assignment_mode === "specific"
+      ? (formData.getAll("team_ids") as string[]).filter(Boolean)
+      : [];
+
+  // Reference image: keep / replace / remove
+  const ref_mode =
+    ((formData.get("reference_image_mode") as string) || "keep") as
+      | "keep"
+      | "replace"
+      | "remove";
+  const reference_image = formData.get("reference_image") as File | null;
+
+  // Deadline parsing ──────────────────────────────────────────────────────
+  const deadline_mode_raw = (formData.get("deadline_mode") as string) || "none";
+  const deadline_mode =
+    deadline_mode_raw === "none"
+      ? null
+      : (deadline_mode_raw as
+          | "absolute"
+          | "relative_to_unlock"
+          | "relative_to_game_start");
+
+  let deadline_at: string | null = null;
+  let deadline_duration_sec: number | null = null;
+  const editPath = `/games/${game_id}/missions/${mission_id}/edit`;
+
+  if (deadline_mode === "absolute") {
+    const raw = (formData.get("deadline_at") as string) || "";
+    if (!raw) {
+      redirect(
+        `${editPath}?error=${encodeURIComponent(
+          "Absolute deadline needs a date/time.",
+        )}`,
+      );
+    }
+    deadline_at = new Date(raw).toISOString();
+  } else if (
+    deadline_mode === "relative_to_unlock" ||
+    deadline_mode === "relative_to_game_start"
+  ) {
+    const minutes = parseInt(
+      (formData.get("deadline_duration_min") as string) || "0",
+      10,
+    );
+    if (!minutes || minutes <= 0) {
+      redirect(
+        `${editPath}?error=${encodeURIComponent(
+          "Relative deadline needs a positive minute count.",
+        )}`,
+      );
+    }
+    deadline_duration_sec = minutes * 60;
+  }
+
+  if (!title) redirect(`${editPath}?error=Title+required`);
+
+  if (
+    validation_mode === "auto" &&
+    submission_type === "text" &&
+    !expected_answer
+  ) {
+    redirect(
+      `${editPath}?error=${encodeURIComponent(
+        "Auto-validated text missions need an expected answer.",
+      )}`,
+    );
+  }
+  if (
+    (submission_type === "photo" || submission_type === "video") &&
+    validation_mode === "auto"
+  ) {
+    redirect(
+      `${editPath}?error=${encodeURIComponent(
+        "Photo and video missions must be GM-judged.",
+      )}`,
+    );
+  }
+  if (assignment_mode === "specific" && team_ids.length === 0) {
+    redirect(
+      `${editPath}?error=${encodeURIComponent(
+        "Pick at least one team or switch to 'All teams'.",
+      )}`,
+    );
+  }
+
+  // Look up the existing reference path so we can clean up storage when
+  // the GM picks Replace or Remove.
+  const { data: existing } = await supabase
+    .from("missions")
+    .select("reference_image_path, game_id, prerequisite_mission_id")
+    .eq("id", mission_id)
+    .single();
+
+  if (!existing) redirect(`/games/${game_id}?error=Mission+not+found`);
+  if (existing.game_id !== game_id) {
+    redirect(`/games/${game_id}?error=Mission+belongs+to+another+game`);
+  }
+  // Don't allow self-prerequisite (cycle of one)
+  if (prerequisite_mission_id === mission_id) {
+    redirect(
+      `${editPath}?error=${encodeURIComponent(
+        "A mission can't be its own prerequisite.",
+      )}`,
+    );
+  }
+
+  // Decide the new reference_image_path value (and any storage cleanup)
+  let new_reference_image_path: string | null | undefined;
+  if (ref_mode === "keep") {
+    new_reference_image_path = undefined; // leave column alone
+  } else if (ref_mode === "remove") {
+    new_reference_image_path = null;
+    if (existing.reference_image_path) {
+      await supabase.storage
+        .from("submissions")
+        .remove([existing.reference_image_path]);
+    }
+  } else if (ref_mode === "replace") {
+    if (!reference_image || reference_image.size === 0) {
+      redirect(
+        `${editPath}?error=${encodeURIComponent(
+          "Pick an image or choose Keep / Remove.",
+        )}`,
+      );
+    }
+    const ext = (reference_image.name.split(".").pop() || "jpg")
+      .toLowerCase()
+      .slice(0, 4);
+    const path = `mission-media/${game_id}/${mission_id}/ref-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("submissions")
+      .upload(path, reference_image, {
+        contentType: reference_image.type || "image/jpeg",
+      });
+    if (upErr) {
+      redirect(
+        `${editPath}?error=${encodeURIComponent(
+          "Image upload failed: " + upErr.message,
+        )}`,
+      );
+    }
+    new_reference_image_path = path;
+    if (existing.reference_image_path) {
+      // Best-effort cleanup of the old asset
+      await supabase.storage
+        .from("submissions")
+        .remove([existing.reference_image_path]);
+    }
+  }
+
+  // Build the update payload. Conditional spread (rather than mutating a
+  // Record<string, unknown>) keeps Supabase's typed update happy.
+  const baseUpdate = {
+    title,
+    description: description || null,
+    points,
+    submission_type,
+    validation_mode,
+    expected_answer,
+    prerequisite_mission_id,
+    assignment_mode,
+    deadline_mode,
+    deadline_at,
+    deadline_duration_sec,
+  };
+  const update =
+    new_reference_image_path !== undefined
+      ? { ...baseUpdate, reference_image_path: new_reference_image_path }
+      : baseUpdate;
+
+  const { error: updErr } = await supabase
+    .from("missions")
+    .update(update)
+    .eq("id", mission_id);
+
+  if (updErr) {
+    redirect(`${editPath}?error=${encodeURIComponent(updErr.message)}`);
+  }
+
+  // Replace assignments wholesale: delete existing, reinsert if specific.
+  // The player query joins mission_team_assignments to filter visibility,
+  // so this is the only piece needed for the change to take effect.
+  await supabase
+    .from("mission_team_assignments")
+    .delete()
+    .eq("mission_id", mission_id);
+
+  if (assignment_mode === "specific" && team_ids.length > 0) {
+    const rows = team_ids.map((tid) => ({
+      mission_id,
+      team_id: tid,
+    }));
+    const { error: aErr } = await supabase
+      .from("mission_team_assignments")
+      .insert(rows);
+    if (aErr) {
+      redirect(
+        `/games/${game_id}?error=${encodeURIComponent(
+          "Mission updated but assignments failed: " + aErr.message,
+        )}`,
+      );
+    }
+  }
+
+  revalidatePath(`/games/${game_id}`);
+  redirect(`/games/${game_id}`);
+}
+
 export async function deleteMission(formData: FormData) {
   const { supabase } = await requireUser();
   const id = formData.get("id") as string;

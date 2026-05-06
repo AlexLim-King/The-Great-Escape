@@ -1,32 +1,92 @@
 "use client";
 
 import { useState } from "react";
-import { createMission } from "@/lib/gm-actions";
 
 type Mission = { id: string; title: string };
 type Team = { id: string; name: string; color: string };
+
+export type MissionInitial = {
+  title: string;
+  description: string | null;
+  points: number;
+  submission_type: "text" | "photo" | "video";
+  validation_mode: "auto" | "gm_judged";
+  expected_answer: string | null;
+  prerequisite_mission_id: string | null;
+  assignment_mode: "all" | "specific";
+  deadline_mode:
+    | "absolute"
+    | "relative_to_unlock"
+    | "relative_to_game_start"
+    | null;
+  /** ISO-8601 string from DB (timestamptz). */
+  deadline_at: string | null;
+  deadline_duration_sec: number | null;
+};
+
+type Props = {
+  gameId: string;
+  missions: Mission[];
+  teams: Team[];
+  /** Server action that consumes the FormData. */
+  action: (formData: FormData) => void | Promise<void>;
+  submitLabel: string;
+  /** Optional initial values; provided in edit mode. */
+  initial?: MissionInitial;
+  /** Pre-checked teams when assignment_mode is "specific". */
+  initialTeamIds?: string[];
+  /**
+   * Edit mode only: signed URL of the existing reference image so the
+   * GM can decide to keep / replace / remove it without re-uploading.
+   */
+  currentReferenceImageUrl?: string | null;
+  /**
+   * Edit mode only: the mission being edited. Excluded from the
+   * prerequisite dropdown (a mission can't depend on itself) and
+   * forwarded to the action via a hidden input.
+   */
+  missionId?: string;
+};
+
+/** Convert a UTC ISO string to the local "YYYY-MM-DDTHH:mm" format the
+    HTML datetime-local input expects. */
+function toLocalDatetimeInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 export default function MissionForm({
   gameId,
   missions,
   teams,
-}: {
-  gameId: string;
-  missions: Mission[];
-  teams: Team[];
-}) {
+  action,
+  submitLabel,
+  initial,
+  initialTeamIds,
+  currentReferenceImageUrl,
+  missionId,
+}: Props) {
+  const isEdit = !!missionId;
+
   const [submissionType, setSubmissionType] = useState<
     "text" | "photo" | "video"
-  >("text");
+  >(initial?.submission_type ?? "text");
   const [validationMode, setValidationMode] = useState<"auto" | "gm_judged">(
-    "auto",
+    initial?.validation_mode ?? "auto",
   );
   const [deadlineMode, setDeadlineMode] = useState<
     "none" | "absolute" | "relative_to_unlock" | "relative_to_game_start"
-  >("none");
+  >(initial?.deadline_mode ?? "none");
   const [assignmentMode, setAssignmentMode] = useState<"all" | "specific">(
-    "all",
+    initial?.assignment_mode ?? "all",
   );
+
+  // In edit mode, the GM can keep / replace / remove the reference image.
+  const [refImageMode, setRefImageMode] = useState<
+    "keep" | "replace" | "remove"
+  >(currentReferenceImageUrl ? "keep" : "replace");
 
   // Photo/video are GM-judged only
   const isMediaSubmission =
@@ -38,19 +98,30 @@ export default function MissionForm({
         { value: "gm_judged", label: "GM judged" },
       ];
 
+  // Filter out the mission being edited from the prereq list
+  const prereqOptions = isEdit
+    ? missions.filter((m) => m.id !== missionId)
+    : missions;
+
+  const initialTeamIdSet = new Set(initialTeamIds ?? []);
+
   return (
     <form
-      action={createMission}
+      action={action}
       encType="multipart/form-data"
       className="space-y-4"
     >
       <input type="hidden" name="game_id" value={gameId} />
+      {missionId && (
+        <input type="hidden" name="mission_id" value={missionId} />
+      )}
 
       <label className="block">
         <span className="text-sm">Title</span>
         <input
           name="title"
           required
+          defaultValue={initial?.title ?? ""}
           className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
         />
       </label>
@@ -60,23 +131,108 @@ export default function MissionForm({
         <textarea
           name="description"
           rows={3}
+          defaultValue={initial?.description ?? ""}
           className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
         />
       </label>
 
-      <label className="block">
-        <span className="text-sm">Reference image (optional)</span>
-        <input
-          type="file"
-          name="reference_image"
-          accept="image/*"
-          className="mt-1 block w-full text-sm"
-        />
-        <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
-          Players see this on the mission detail page — useful as a visual clue
-          or context.
-        </span>
-      </label>
+      {/* Reference image — slightly different UX in create vs edit */}
+      {isEdit ? (
+        <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">
+          <legend className="text-sm px-1">Reference image</legend>
+
+          {currentReferenceImageUrl ? (
+            <>
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={currentReferenceImageUrl}
+                  alt="Current reference"
+                  className="w-20 h-20 object-cover rounded border border-black/10 dark:border-white/10 flex-none"
+                />
+                <p className="text-xs text-black/60 dark:text-white/60">
+                  Current image
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="reference_image_mode"
+                    value="keep"
+                    checked={refImageMode === "keep"}
+                    onChange={() => setRefImageMode("keep")}
+                  />
+                  Keep current
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="reference_image_mode"
+                    value="replace"
+                    checked={refImageMode === "replace"}
+                    onChange={() => setRefImageMode("replace")}
+                  />
+                  Replace
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="reference_image_mode"
+                    value="remove"
+                    checked={refImageMode === "remove"}
+                    onChange={() => setRefImageMode("remove")}
+                  />
+                  Remove
+                </label>
+              </div>
+
+              {refImageMode === "replace" && (
+                <input
+                  type="file"
+                  name="reference_image"
+                  accept="image/*"
+                  required
+                  className="block w-full text-sm"
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <input
+                type="hidden"
+                name="reference_image_mode"
+                value="replace"
+              />
+              <input
+                type="file"
+                name="reference_image"
+                accept="image/*"
+                className="block w-full text-sm"
+              />
+              <p className="text-xs text-black/50 dark:text-white/50">
+                Players see this on the mission detail page — useful as a visual
+                clue or context.
+              </p>
+            </>
+          )}
+        </fieldset>
+      ) : (
+        <label className="block">
+          <span className="text-sm">Reference image (optional)</span>
+          <input
+            type="file"
+            name="reference_image"
+            accept="image/*"
+            className="mt-1 block w-full text-sm"
+          />
+          <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
+            Players see this on the mission detail page — useful as a visual
+            clue or context.
+          </span>
+        </label>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
@@ -121,6 +277,7 @@ export default function MissionForm({
           <span className="text-sm">Expected answer</span>
           <input
             name="expected_answer"
+            defaultValue={initial?.expected_answer ?? ""}
             className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
           />
         </label>
@@ -132,7 +289,7 @@ export default function MissionForm({
           <input
             name="points"
             type="number"
-            defaultValue={10}
+            defaultValue={initial?.points ?? 10}
             min={0}
             className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
           />
@@ -141,11 +298,11 @@ export default function MissionForm({
           <span className="text-sm">Unlocks after</span>
           <select
             name="prerequisite_mission_id"
-            defaultValue="none"
+            defaultValue={initial?.prerequisite_mission_id ?? "none"}
             className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
           >
             <option value="none">— always available —</option>
-            {missions.map((m) => (
+            {prereqOptions.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.title}
               </option>
@@ -191,7 +348,12 @@ export default function MissionForm({
             ) : (
               teams.map((t) => (
                 <label key={t.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="team_ids" value={t.id} />
+                  <input
+                    type="checkbox"
+                    name="team_ids"
+                    value={t.id}
+                    defaultChecked={initialTeamIdSet.has(t.id)}
+                  />
                   <span
                     className="inline-block w-3 h-3 rounded-full"
                     style={{ background: t.color }}
@@ -243,6 +405,7 @@ export default function MissionForm({
               type="datetime-local"
               name="deadline_at"
               required
+              defaultValue={toLocalDatetimeInput(initial?.deadline_at)}
               className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
             />
           </label>
@@ -257,7 +420,11 @@ export default function MissionForm({
               name="deadline_duration_min"
               min={1}
               required
-              defaultValue={15}
+              defaultValue={
+                initial?.deadline_duration_sec
+                  ? Math.round(initial.deadline_duration_sec / 60)
+                  : 15
+              }
               className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
             />
             <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
@@ -267,13 +434,21 @@ export default function MissionForm({
             </span>
           </label>
         )}
+
+        {isEdit && (
+          <p className="text-xs text-black/55 dark:text-white/55">
+            Deadline changes apply to teams that haven&apos;t unlocked this
+            mission yet. Teams with an active timer keep the original window
+            so they aren&apos;t penalised mid-game.
+          </p>
+        )}
       </fieldset>
 
       <button
         type="submit"
         className="rounded bg-foreground text-background px-4 py-2 font-medium"
       >
-        Create mission
+        {submitLabel}
       </button>
     </form>
   );

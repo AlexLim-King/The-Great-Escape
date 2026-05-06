@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import MissionForm from "@/components/MissionForm";
+import { createMission } from "@/lib/gm-actions";
 
 export default async function NewMissionPage(
   props: PageProps<"/games/[id]/missions/new">,
@@ -57,6 +58,8 @@ export default async function NewMissionPage(
         gameId={game.id}
         missions={missions ?? []}
         teams={teams ?? []}
+        action={createMission}
+        submitLabel="Create mission"
       />
     </main>
   );

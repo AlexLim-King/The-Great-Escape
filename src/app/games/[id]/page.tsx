@@ -294,16 +294,28 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                       <p className="text-sm mt-1">{m.description}</p>
                     )}
                   </div>
-                  <form action={deleteMission}>
-                    <input type="hidden" name="id" value={m.id} />
-                    <input type="hidden" name="game_id" value={game.id} />
-                    <button
-                      type="submit"
-                      className="text-sm text-red-600 hover:underline"
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Link
+                      href={`/games/${game.id}/missions/${m.id}/edit`}
+                      className="text-sm hover:underline"
                     >
-                      Delete
-                    </button>
-                  </form>
+                      Edit
+                    </Link>
+                    <form action={deleteMission}>
+                      <input type="hidden" name="id" value={m.id} />
+                      <input
+                        type="hidden"
+                        name="game_id"
+                        value={game.id}
+                      />
+                      <button
+                        type="submit"
+                        className="text-sm text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </li>
             ))}
