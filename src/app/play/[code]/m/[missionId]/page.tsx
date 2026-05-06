@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { submitTextAnswer, submitMedia } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
+import MediaUploadField from "@/components/MediaUploadField";
 
 export default async function SubmitMissionPage(
   props: PageProps<"/play/[code]/m/[missionId]">,
@@ -144,7 +145,7 @@ export default async function SubmitMissionPage(
       ) : isMedia ? (
         <form
           action={submitMedia}
-          className="mt-6 space-y-3"
+          className="mt-6 space-y-4"
           encType="multipart/form-data"
         >
           <input type="hidden" name="mission_id" value={mission.id} />
@@ -155,27 +156,18 @@ export default async function SubmitMissionPage(
             name="media_kind"
             value={isPhoto ? "photo" : "video"}
           />
-          <label className="block">
-            <span className="text-sm">
-              {isPhoto ? "Take or upload a photo" : "Record or upload a video"}
-            </span>
-            <input
-              name="media"
-              type="file"
-              accept={isPhoto ? "image/*" : "video/*"}
-              capture="environment"
-              required
-              className="mt-1 block w-full text-sm"
-            />
-            {isVideo && (
-              <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
-                Keep it under ~60 seconds and 100 MB.
-              </span>
-            )}
-          </label>
+
+          <MediaUploadField kind={isPhoto ? "photo" : "video"} />
+
+          {isVideo && (
+            <p className="text-xs text-black/50 dark:text-white/50">
+              Keep it under ~60 seconds and 100 MB.
+            </p>
+          )}
+
           <button
             type="submit"
-            className="rounded bg-foreground text-background px-4 py-2 font-medium"
+            className="w-full sm:w-auto rounded bg-foreground text-background px-4 py-2.5 font-medium"
           >
             {isPhoto ? "Submit photo" : "Submit video"}
           </button>
