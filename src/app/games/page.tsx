@@ -8,6 +8,8 @@ export default async function GamesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  // Guests can't own games — bounce them to the player surface.
+  if (user.is_anonymous) redirect("/play");
 
   const { data: games } = await supabase
     .from("games")

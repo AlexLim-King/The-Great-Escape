@@ -27,14 +27,16 @@ export default async function Header() {
         <nav className="flex items-center gap-4 text-sm">
           {user ? (
             <>
-              <Link href="/games" className="hover:underline">
-                My games
-              </Link>
+              {!user.is_anonymous && (
+                <Link href="/games" className="hover:underline">
+                  My games
+                </Link>
+              )}
               <Link href="/play" className="hover:underline">
                 Join
               </Link>
               <span className="text-black/60 dark:text-white/60">
-                {displayName}
+                {user.is_anonymous ? `${displayName} (guest)` : displayName}
               </span>
               <form action={logout}>
                 <button

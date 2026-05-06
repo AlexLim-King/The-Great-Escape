@@ -6,8 +6,7 @@ import {
   updateSubmissionBonus,
   discardSubmission,
 } from "@/lib/gm-actions";
-import Leaderboard from "@/components/Leaderboard";
-import DashboardNav from "@/components/DashboardNav";
+import TabNav from "@/components/TabNav";
 
 type ReviewTab = "pending" | "approved" | "rejected" | "all";
 const REVIEW_TABS: Array<{ value: ReviewTab; label: string }> = [
@@ -112,15 +111,19 @@ export default async function ReviewPage(
         <h1 className="text-2xl font-semibold mt-2">{game.name}</h1>
       </header>
 
-      <DashboardNav
-        gameId={game.id}
-        current="review"
-        pendingCount={counts.pending}
+      <TabNav
+        current="Review"
+        tabs={[
+          { label: "Setup", href: `/games/${game.id}` },
+          {
+            label: "Review",
+            href: `/games/${game.id}/review`,
+            badge: counts.pending,
+            badgeTone: "warn",
+          },
+          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
+        ]}
       />
-
-      {/* Leaderboard sits at the top of review so the GM can keep it in
-          sight while judging */}
-      <Leaderboard gameId={game.id} />
 
       {/* Review section */}
       <section>

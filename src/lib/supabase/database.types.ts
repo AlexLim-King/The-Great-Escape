@@ -367,6 +367,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_host_games: { Args: never; Returns: boolean }
       expire_overdue_missions_for_game: {
         Args: { p_game_id: string }
         Returns: number

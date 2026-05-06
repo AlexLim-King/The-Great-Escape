@@ -8,7 +8,7 @@ import {
   deleteGame,
   setTeamPassword,
 } from "@/lib/gm-actions";
-import DashboardNav from "@/components/DashboardNav";
+import TabNav from "@/components/TabNav";
 
 export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const { id } = await props.params;
@@ -113,10 +113,18 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
         )}
       </header>
 
-      <DashboardNav
-        gameId={game.id}
-        current="setup"
-        pendingCount={pendingCount ?? 0}
+      <TabNav
+        current="Setup"
+        tabs={[
+          { label: "Setup", href: `/games/${game.id}` },
+          {
+            label: "Review",
+            href: `/games/${game.id}/review`,
+            badge: pendingCount ?? 0,
+            badgeTone: "warn",
+          },
+          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
+        ]}
       />
 
       {/* Teams */}

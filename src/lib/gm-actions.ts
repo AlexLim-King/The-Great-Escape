@@ -18,6 +18,18 @@ async function requireUser() {
 export async function createGame(formData: FormData) {
   const { supabase, user } = await requireUser();
 
+  // Guests (anonymous Supabase auth users) cannot host games. RLS would
+  // also reject this, but the server-side check gives us a friendly
+  // error path instead of a generic policy violation.
+  if (user.is_anonymous) {
+    redirect(
+      "/games/new?error=" +
+        encodeURIComponent(
+          "Hosting requires a full account. Sign up or log in to create a game.",
+        ),
+    );
+  }
+
   const name = (formData.get("name") as string)?.trim();
   const description = ((formData.get("description") as string) ?? "").trim();
   if (!name) redirect("/games/new?error=Name+required");

@@ -21,15 +21,17 @@ export default async function HomePage() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
           {user ? (
             <>
-              <Link
-                href="/games"
-                className="rounded bg-foreground text-background px-5 py-3 font-medium"
-              >
-                Host a game →
-              </Link>
+              {!user.is_anonymous && (
+                <Link
+                  href="/games"
+                  className="rounded bg-foreground text-background px-5 py-3 font-medium"
+                >
+                  Host a game →
+                </Link>
+              )}
               <Link
                 href="/play"
-                className="rounded border border-black/15 dark:border-white/15 px-5 py-3 font-medium"
+                className={`rounded ${user.is_anonymous ? "bg-foreground text-background" : "border border-black/15 dark:border-white/15"} px-5 py-3 font-medium`}
               >
                 Join a game →
               </Link>

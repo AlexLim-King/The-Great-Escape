@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { joinTeam, leaveTeam } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
-import Leaderboard from "@/components/Leaderboard";
+import TabNav from "@/components/TabNav";
 
 export default async function PlayGamePage(
   props: PageProps<"/play/[code]">,
@@ -199,7 +199,15 @@ export default async function PlayGamePage(
           )}
         </section>
       ) : (
-        <section className="mt-6">
+        <section className="mt-6 space-y-4">
+          <TabNav
+            current="Missions"
+            tabs={[
+              { label: "Missions", href: `/play/${code}` },
+              { label: "Leaderboard", href: `/play/${code}/leaderboard` },
+            ]}
+          />
+
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm">
               You&apos;re on team{" "}
@@ -320,10 +328,6 @@ export default async function PlayGamePage(
               })}
             </ul>
           )}
-
-          <div className="mt-8">
-            <Leaderboard gameId={game.id} highlightTeamId={myTeam.id} />
-          </div>
         </section>
       )}
     </main>
