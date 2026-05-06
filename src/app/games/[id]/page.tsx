@@ -7,6 +7,7 @@ import {
   deleteMission,
   judgeSubmission,
   updateSubmissionBonus,
+  discardSubmission,
   deleteGame,
   setTeamPassword,
 } from "@/lib/gm-actions";
@@ -79,7 +80,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const { data: allSubmissions } = await supabase
     .from("submissions")
     .select(
-      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, missions!inner(title, game_id, points, submission_type), teams!inner(name, color)",
+      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(title, game_id, points, submission_type), teams!inner(name, color)",
     )
     .eq("missions.game_id", id)
     .order("created_at", { ascending: false });
@@ -110,6 +111,21 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
         .from("submissions")
         .createSignedUrl(s.media_path, 60 * 60);
       if (data?.signedUrl) signedUrls.set(s.id, data.signedUrl);
+    }
+  }
+
+  // Look up submitter display names for the visible set
+  const submitterNames = new Map<string, string>();
+  const submitterIds = Array.from(
+    new Set(visible.map((s) => s.submitted_by).filter(Boolean)),
+  ) as string[];
+  if (submitterIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", submitterIds);
+    for (const p of profiles ?? []) {
+      submitterNames.set(p.id, p.display_name);
     }
   }
 
@@ -446,6 +462,14 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                       <span className="text-xs text-black/50 dark:text-white/50 ml-2">
                         {mission?.points} pts base
                       </span>
+                      {s.submitted_by && submitterNames.get(s.submitted_by) && (
+                        <span className="block text-xs text-black/55 dark:text-white/55 mt-0.5">
+                          submitted by{" "}
+                          <span className="font-medium">
+                            {submitterNames.get(s.submitted_by)}
+                          </span>
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <span
@@ -564,38 +588,61 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                     </div>
                   )}
 
-                  {/* Rejected: re-approve form with bonus */}
+                  {/* Rejected: re-approve form with bonus + Discard */}
                   {isRejected && (
-                    <form
-                      action={judgeSubmission}
-                      className="flex flex-wrap items-center gap-2 pt-1"
-                    >
-                      <input type="hidden" name="id" value={s.id} />
-                      <input type="hidden" name="game_id" value={game.id} />
-                      <input type="hidden" name="tab" value={tab} />
-                      <input
-                        name="feedback"
-                        defaultValue={s.feedback ?? ""}
-                        placeholder="Feedback (optional)"
-                        className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-1.5 flex-1 min-w-[12rem] text-sm"
-                      />
-                      <input
-                        name="bonus_points"
-                        type="number"
-                        min={0}
-                        defaultValue={0}
-                        title="Bonus points"
-                        className="w-16 rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm font-mono"
-                      />
-                      <button
-                        type="submit"
-                        name="decision"
-                        value="approved"
-                        className="rounded bg-green-600 text-white px-3 py-1.5 text-sm"
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <form
+                        action={judgeSubmission}
+                        className="flex flex-wrap items-center gap-2 flex-1 min-w-[18rem]"
                       >
-                        Re-approve
-                      </button>
-                    </form>
+                        <input type="hidden" name="id" value={s.id} />
+                        <input
+                          type="hidden"
+                          name="game_id"
+                          value={game.id}
+                        />
+                        <input type="hidden" name="tab" value={tab} />
+                        <input
+                          name="feedback"
+                          defaultValue={s.feedback ?? ""}
+                          placeholder="Feedback (optional)"
+                          className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-1.5 flex-1 min-w-[12rem] text-sm"
+                        />
+                        <input
+                          name="bonus_points"
+                          type="number"
+                          min={0}
+                          defaultValue={0}
+                          title="Bonus points"
+                          className="w-16 rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm font-mono"
+                        />
+                        <button
+                          type="submit"
+                          name="decision"
+                          value="approved"
+                          className="rounded bg-green-600 text-white px-3 py-1.5 text-sm"
+                        >
+                          Re-approve
+                        </button>
+                      </form>
+
+                      <form action={discardSubmission}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <input
+                          type="hidden"
+                          name="game_id"
+                          value={game.id}
+                        />
+                        <input type="hidden" name="tab" value={tab} />
+                        <button
+                          type="submit"
+                          title="Delete this rejected submission. The team can submit again."
+                          className="rounded border border-black/15 dark:border-white/15 px-3 py-1.5 text-sm text-black/70 dark:text-white/70 hover:bg-black/5 dark:hover:bg-white/5"
+                        >
+                          Discard
+                        </button>
+                      </form>
+                    </div>
                   )}
 
                   {/* Pending: full judge form with feedback + bonus + Approve/Reject */}

@@ -335,6 +335,28 @@ export async function judgeSubmission(formData: FormData) {
 }
 
 /**
+ * Discard a rejected submission entirely. The team's mission_state is
+ * already 'unlocked' from the rejection trigger so they can simply try
+ * again. Constrained to rejected rows for safety — anything else is a
+ * no-op.
+ */
+export async function discardSubmission(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = formData.get("id") as string;
+  const game_id = formData.get("game_id") as string;
+  const tab = ((formData.get("tab") as string) ?? "rejected").trim();
+
+  await supabase
+    .from("submissions")
+    .delete()
+    .eq("id", id)
+    .eq("status", "rejected");
+
+  revalidatePath(`/games/${game_id}`);
+  redirect(`/games/${game_id}?tab=${tab}`);
+}
+
+/**
  * Edit the bonus on an already-approved submission without changing its
  * status. The DB trigger mirrors the new value to team_mission_state, so
  * the leaderboard refreshes via realtime.

@@ -47,3 +47,34 @@ export async function logout() {
   revalidatePath("/", "layout");
   redirect("/login");
 }
+
+/**
+ * Anonymous sign-in for players who don't want to create an account.
+ * Creates a real auth.users row (no email) so all the existing RLS
+ * policies and FK relationships work transparently. The user can later
+ * upgrade to a full account via linkIdentity (not wired yet).
+ */
+export async function signInAsGuest(formData: FormData) {
+  const display_name = ((formData.get("display_name") as string) ?? "").trim();
+  if (!display_name) {
+    redirect("/play?error=Pick+a+display+name");
+  }
+
+  // Honour an optional ?next= path, but only same-origin paths
+  const next_raw = ((formData.get("next") as string) ?? "/play").trim();
+  const next = next_raw.startsWith("/") && !next_raw.startsWith("//")
+    ? next_raw
+    : "/play";
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInAnonymously({
+    options: { data: { display_name } },
+  });
+
+  if (error) {
+    redirect(`/play?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  redirect(next);
+}

@@ -65,6 +65,13 @@ export default async function SignupPage(props: PageProps<"/signup">) {
             Log in
           </Link>
         </p>
+
+        <p className="text-xs text-center text-black/60 dark:text-white/60">
+          Just here to play?{" "}
+          <Link href="/play" className="underline">
+            Join as guest
+          </Link>
+        </p>
       </form>
     </main>
   );
