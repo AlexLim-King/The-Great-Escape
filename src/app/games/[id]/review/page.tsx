@@ -7,6 +7,7 @@ import {
   discardSubmission,
 } from "@/lib/gm-actions";
 import TabNav from "@/components/TabNav";
+import MissionInspector from "@/components/MissionInspector";
 
 type ReviewTab = "pending" | "approved" | "rejected" | "all";
 const REVIEW_TABS: Array<{ value: ReviewTab; label: string }> = [
@@ -45,11 +46,13 @@ export default async function ReviewPage(
   // counts/states before we render
   await supabase.rpc("expire_overdue_missions_for_game", { p_game_id: id });
 
-  // All submissions for this game (we tab/filter in-memory below)
+  // All submissions for this game (we tab/filter in-memory below).
+  // The missions!inner join carries the full mission spec so the per-row
+  // <MissionInspector> popup has everything it needs without a refetch.
   const { data: allSubmissions } = await supabase
     .from("submissions")
     .select(
-      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(title, game_id, points, submission_type), teams!inner(name, color)",
+      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(id, title, game_id, points, submission_type, description, validation_mode, expected_answer, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path), teams!inner(name, color)",
     )
     .eq("missions.game_id", id)
     .order("created_at", { ascending: false });
@@ -80,6 +83,21 @@ export default async function ReviewPage(
         .from("submissions")
         .createSignedUrl(s.media_path, 60 * 60);
       if (data?.signedUrl) signedUrls.set(s.id, data.signedUrl);
+    }
+  }
+
+  // Reference image signed URLs (deduped per mission so a busy mission
+  // doesn't sign the same path 20 times).
+  const referenceUrls = new Map<string, string>();
+  const seenMissionRefs = new Set<string>();
+  for (const s of visible) {
+    const m = Array.isArray(s.missions) ? s.missions[0] : s.missions;
+    if (m?.id && m.reference_image_path && !seenMissionRefs.has(m.id)) {
+      seenMissionRefs.add(m.id);
+      const { data } = await supabase.storage
+        .from("submissions")
+        .createSignedUrl(m.reference_image_path, 60 * 60);
+      if (data?.signedUrl) referenceUrls.set(m.id, data.signedUrl);
     }
   }
 
@@ -216,7 +234,14 @@ export default async function ReviewPage(
                       <span className="text-black/40 dark:text-white/40">
                         {" → "}
                       </span>
-                      <span>{mission?.title}</span>
+                      {mission ? (
+                        <MissionInspector
+                          mission={mission}
+                          referenceImageUrl={referenceUrls.get(mission.id)}
+                        />
+                      ) : (
+                        <span>?</span>
+                      )}
                       <span className="text-xs text-black/50 dark:text-white/50 ml-2">
                         {mission?.points} pts base
                       </span>
