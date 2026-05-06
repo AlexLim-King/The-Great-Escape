@@ -330,8 +330,12 @@ export async function judgeSubmission(formData: FormData) {
     })
     .eq("id", id);
 
-  revalidatePath(`/games/${game_id}`);
-  redirect(tab ? `/games/${game_id}?tab=${tab}` : `/games/${game_id}`);
+  revalidatePath(`/games/${game_id}/review`);
+  redirect(
+    tab
+      ? `/games/${game_id}/review?tab=${tab}`
+      : `/games/${game_id}/review`,
+  );
 }
 
 /**
@@ -352,8 +356,8 @@ export async function discardSubmission(formData: FormData) {
     .eq("id", id)
     .eq("status", "rejected");
 
-  revalidatePath(`/games/${game_id}`);
-  redirect(`/games/${game_id}?tab=${tab}`);
+  revalidatePath(`/games/${game_id}/review`);
+  redirect(`/games/${game_id}/review?tab=${tab}`);
 }
 
 /**
@@ -378,6 +382,6 @@ export async function updateSubmissionBonus(formData: FormData) {
     .eq("id", id)
     .eq("status", "approved");
 
-  revalidatePath(`/games/${game_id}`);
-  redirect(`/games/${game_id}?tab=${tab}`);
+  revalidatePath(`/games/${game_id}/review`);
+  redirect(`/games/${game_id}/review?tab=${tab}`);
 }
