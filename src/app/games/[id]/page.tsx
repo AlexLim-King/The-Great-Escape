@@ -7,7 +7,9 @@ import {
   deleteMission,
   judgeSubmission,
   deleteGame,
+  setTeamPassword,
 } from "@/lib/gm-actions";
+import Leaderboard from "@/components/Leaderboard";
 
 export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const { id } = await props.params;
@@ -31,7 +33,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
   const [{ data: teams }, { data: missions }] = await Promise.all([
     supabase
       .from("teams")
-      .select("id, name, color, created_at")
+      .select("id, name, color, requires_password, created_at")
       .eq("game_id", id)
       .order("created_at", { ascending: true }),
     supabase
@@ -139,24 +141,54 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
             {teams.map((t) => (
               <li
                 key={t.id}
-                className="rounded border border-black/10 dark:border-white/10 p-3 flex items-center justify-between"
+                className="rounded border border-black/10 dark:border-white/10 p-3 space-y-2"
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className="inline-block w-4 h-4 rounded-full"
-                    style={{ background: t.color }}
-                    aria-hidden
-                  />
-                  <span>{t.name}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="inline-block w-4 h-4 rounded-full"
+                      style={{ background: t.color }}
+                      aria-hidden
+                    />
+                    <span>{t.name}</span>
+                    {t.requires_password && (
+                      <span
+                        className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded px-1.5 py-0.5"
+                        title="Password required to join"
+                      >
+                        🔒 password set
+                      </span>
+                    )}
+                  </div>
+                  <form action={deleteTeam}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="game_id" value={game.id} />
+                    <button
+                      type="submit"
+                      className="text-sm text-red-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </form>
                 </div>
-                <form action={deleteTeam}>
+                <form action={setTeamPassword} className="flex gap-2">
                   <input type="hidden" name="id" value={t.id} />
                   <input type="hidden" name="game_id" value={game.id} />
+                  <input
+                    name="password"
+                    type="text"
+                    placeholder={
+                      t.requires_password
+                        ? "Change password (blank to clear)"
+                        : "Set password (optional)"
+                    }
+                    className="flex-1 rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-1.5 text-sm"
+                  />
                   <button
                     type="submit"
-                    className="text-sm text-red-600 hover:underline"
+                    className="text-sm rounded border border-black/15 dark:border-white/15 px-3"
                   >
-                    Remove
+                    {t.requires_password ? "Update" : "Set"}
                   </button>
                 </form>
               </li>
@@ -174,7 +206,13 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
             name="name"
             placeholder="Team name"
             required
-            className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 flex-1 min-w-[12rem]"
+            className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 flex-1 min-w-[10rem]"
+          />
+          <input
+            name="password"
+            type="text"
+            placeholder="Password (optional)"
+            className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 w-44"
           />
           <input
             name="color"
@@ -190,6 +228,10 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
           </button>
         </form>
       </section>
+
+      {/* Leaderboard */}
+      <Leaderboard gameId={game.id} />
+
 
       {/* Missions */}
       <section>

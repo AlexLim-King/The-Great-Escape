@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { joinTeam, leaveTeam } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
+import Leaderboard from "@/components/Leaderboard";
 
 export default async function PlayGamePage(
   props: PageProps<"/play/[code]">,
@@ -28,7 +29,7 @@ export default async function PlayGamePage(
   // Find the user's team in this game (if any)
   const { data: teams } = await supabase
     .from("teams")
-    .select("id, name, color")
+    .select("id, name, color, requires_password")
     .eq("game_id", game.id)
     .order("created_at", { ascending: true });
 
@@ -148,26 +149,46 @@ export default async function PlayGamePage(
               {teams.map((t) => (
                 <li
                   key={t.id}
-                  className="rounded border border-black/10 dark:border-white/10 p-3 flex items-center justify-between"
+                  className="rounded border border-black/10 dark:border-white/10 p-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="inline-block w-4 h-4 rounded-full"
-                      style={{ background: t.color }}
-                      aria-hidden
-                    />
-                    <span className="font-medium">{t.name}</span>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="inline-block w-4 h-4 rounded-full"
+                        style={{ background: t.color }}
+                        aria-hidden
+                      />
+                      <span className="font-medium">{t.name}</span>
+                      {t.requires_password && (
+                        <span
+                          className="text-xs text-amber-700 dark:text-amber-300"
+                          title="Password required to join"
+                        >
+                          🔒
+                        </span>
+                      )}
+                    </div>
+                    <form action={joinTeam} className="flex gap-2">
+                      <input type="hidden" name="team_id" value={t.id} />
+                      <input type="hidden" name="join_code" value={code} />
+                      {t.requires_password && (
+                        <input
+                          name="password"
+                          type="password"
+                          placeholder="Team password"
+                          required
+                          autoComplete="off"
+                          className="rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1 text-sm w-40"
+                        />
+                      )}
+                      <button
+                        type="submit"
+                        className="rounded bg-foreground text-background px-3 py-1 text-sm"
+                      >
+                        Join
+                      </button>
+                    </form>
                   </div>
-                  <form action={joinTeam}>
-                    <input type="hidden" name="team_id" value={t.id} />
-                    <input type="hidden" name="join_code" value={code} />
-                    <button
-                      type="submit"
-                      className="rounded bg-foreground text-background px-3 py-1 text-sm"
-                    >
-                      Join
-                    </button>
-                  </form>
                 </li>
               ))}
             </ul>
@@ -299,6 +320,10 @@ export default async function PlayGamePage(
               })}
             </ul>
           )}
+
+          <div className="mt-8">
+            <Leaderboard gameId={game.id} highlightTeamId={myTeam.id} />
+          </div>
         </section>
       )}
     </main>

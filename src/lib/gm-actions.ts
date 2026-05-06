@@ -62,12 +62,49 @@ export async function createTeam(formData: FormData) {
   const game_id = formData.get("game_id") as string;
   const name = (formData.get("name") as string)?.trim();
   const color = (formData.get("color") as string) || "#3b82f6";
+  const password = ((formData.get("password") as string) ?? "").trim();
 
   if (!name) redirect(`/games/${game_id}?error=Team+name+required`);
 
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from("teams")
-    .insert({ game_id, name, color });
+    .insert({ game_id, name, color })
+    .select("id")
+    .single();
+
+  if (error || !inserted) {
+    redirect(
+      `/games/${game_id}?error=${encodeURIComponent(error?.message ?? "Insert failed")}`,
+    );
+  }
+
+  if (password) {
+    const { error: pwErr } = await supabase.rpc("set_team_password", {
+      p_team_id: inserted.id,
+      p_password: password,
+    });
+    if (pwErr) {
+      redirect(
+        `/games/${game_id}?error=${encodeURIComponent("Team created but password failed: " + pwErr.message)}`,
+      );
+    }
+  }
+
+  revalidatePath(`/games/${game_id}`);
+  redirect(`/games/${game_id}`);
+}
+
+export async function setTeamPassword(formData: FormData) {
+  const { supabase } = await requireUser();
+  const team_id = formData.get("id") as string;
+  const game_id = formData.get("game_id") as string;
+  const raw = (formData.get("password") as string) ?? "";
+
+  // Empty string clears the password
+  const { error } = await supabase.rpc("set_team_password", {
+    p_team_id: team_id,
+    p_password: raw.trim() || "",
+  });
 
   if (error) {
     redirect(`/games/${game_id}?error=${encodeURIComponent(error.message)}`);

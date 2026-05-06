@@ -324,21 +324,27 @@ export type Database = {
           created_at: string
           game_id: string
           id: string
+          join_password_hash: string | null
           name: string
+          requires_password: boolean | null
         }
         Insert: {
           color?: string
           created_at?: string
           game_id: string
           id?: string
+          join_password_hash?: string | null
           name: string
+          requires_password?: boolean | null
         }
         Update: {
           color?: string
           created_at?: string
           game_id?: string
           id?: string
+          join_password_hash?: string | null
           name?: string
+          requires_password?: boolean | null
         }
         Relationships: [
           {
@@ -363,9 +369,27 @@ export type Database = {
         Args: { p_team_id: string }
         Returns: number
       }
+      game_leaderboard: {
+        Args: { p_game_id: string }
+        Returns: {
+          color: string
+          completed: number
+          score: number
+          team_id: string
+          team_name: string
+        }[]
+      }
       gen_join_code: { Args: never; Returns: string }
+      join_team_with_password: {
+        Args: { p_password: string; p_team_id: string }
+        Returns: string
+      }
       recompute_team_mission_state: {
         Args: { p_team_id: string }
+        Returns: undefined
+      }
+      set_team_password: {
+        Args: { p_password: string; p_team_id: string }
         Returns: undefined
       }
     }

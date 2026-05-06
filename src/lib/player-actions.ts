@@ -14,25 +14,31 @@ async function requireUser() {
 }
 
 export async function joinTeam(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
   const team_id = formData.get("team_id") as string;
   const join_code = formData.get("join_code") as string;
+  const password = ((formData.get("password") as string) ?? "").trim();
 
-  // Verify the team belongs to this game (defensive — RLS should also gate it)
-  const { data: team } = await supabase
-    .from("teams")
-    .select("id, game_id, games!inner(join_code)")
-    .eq("id", team_id)
-    .single();
+  // RPC handles both password verification (if set) and the membership insert
+  // atomically with elevated privileges.
+  const { data: result, error } = await supabase.rpc(
+    "join_team_with_password",
+    {
+      p_team_id: team_id,
+      p_password: password,
+    },
+  );
 
-  if (!team) redirect(`/play/${join_code}?error=Team+not+found`);
-
-  const { error } = await supabase
-    .from("team_members")
-    .insert({ team_id, user_id: user.id });
-
-  if (error && !error.message.includes("duplicate")) {
+  if (error) {
     redirect(`/play/${join_code}?error=${encodeURIComponent(error.message)}`);
+  }
+  if (result === "wrong_password") {
+    redirect(
+      `/play/${join_code}?error=${encodeURIComponent("Wrong password — ask your GM.")}`,
+    );
+  }
+  if (result === "not_found") {
+    redirect(`/play/${join_code}?error=Team+not+found`);
   }
 
   revalidatePath(`/play/${join_code}`);
