@@ -66,8 +66,11 @@ async function ensureMissionSubmittable(
   mission_id: string,
   join_code: string,
 ) {
-  // Sweep any overdue missions for this team first
+  // Sweep any overdue missions and re-evaluate unlocks (so a freshly-
+  // opened time gate or newly-satisfied unlock group counts as 'unlocked'
+  // by the time the state check below runs).
   await supabase.rpc("expire_overdue_missions_for_team", { p_team_id: team_id });
+  await supabase.rpc("recompute_team_mission_state", { p_team_id: team_id });
 
   const { data: state } = await supabase
     .from("team_mission_state")

@@ -54,8 +54,12 @@ export default async function SubmitMissionPage(
 
   if (!myTeamId) redirect(`/play/${code}`);
 
-  // Lazy expiry sweep before reading state
+  // Lazy state refresh: expire overdue, then recompute so time gates and
+  // newly-eligible unlocks are honored before the gate check below.
   await supabase.rpc("expire_overdue_missions_for_team", {
+    p_team_id: myTeamId,
+  });
+  await supabase.rpc("recompute_team_mission_state", {
     p_team_id: myTeamId,
   });
 

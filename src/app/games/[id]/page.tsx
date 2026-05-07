@@ -46,7 +46,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
       supabase
         .from("missions")
         .select(
-          "id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, deadline_mode, deadline_at, deadline_duration_sec, assignment_mode, reference_image_path, display_order, created_at, mission_team_assignments(team_id)",
+          "id, title, description, points, submission_type, validation_mode, expected_answer, unlock_groups, unlock_after, deadline_mode, deadline_at, deadline_duration_sec, assignment_mode, reference_image_path, display_order, created_at, mission_team_assignments(team_id)",
         )
         .eq("game_id", id)
         .order("display_order", { ascending: true })
@@ -85,7 +85,8 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
     points: m.points,
     submission_type: m.submission_type as SortableMission["submission_type"],
     validation_mode: m.validation_mode as SortableMission["validation_mode"],
-    prerequisite_mission_id: m.prerequisite_mission_id,
+    unlock_groups: (m.unlock_groups ?? []) as string[][],
+    unlock_after: m.unlock_after,
     deadline_mode: m.deadline_mode as SortableMission["deadline_mode"],
     deadline_at: m.deadline_at,
     deadline_duration_sec: m.deadline_duration_sec,

@@ -60,16 +60,23 @@ export default async function PlayGamePage(
   let totalPoints = 0;
 
   if (myTeamId) {
-    // Lazy expiry sweep — flips this team's overdue missions to failed_expired
-    // before we render so the player sees correct state.
+    // Lazy state refresh:
+    //   1. Expire overdue (unlocked → failed_expired for past-deadline rows)
+    //   2. Recompute (apply time gates: locked → unlocked when unlock_after
+    //      has passed, and unlock anything whose unlock_groups are now
+    //      satisfied). Order matters — expire first so the recompute sees
+    //      the final terminal state.
     await supabase.rpc("expire_overdue_missions_for_team", {
+      p_team_id: myTeamId,
+    });
+    await supabase.rpc("recompute_team_mission_state", {
       p_team_id: myTeamId,
     });
 
     // Filter by assignment scope: a mission shows up either if it targets
     // every team OR if it has a specific assignment to *this* team.
     const missionCols =
-      "id, title, description, points, submission_type, validation_mode, prerequisite_mission_id, deadline_mode, created_at";
+      "id, title, description, points, submission_type, validation_mode, unlock_groups, unlock_after, deadline_mode, created_at";
     const [
       { data: missionsAll },
       { data: missionsSpecific },

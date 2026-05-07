@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import UnlockEditor from "./UnlockEditor";
 
 type Mission = { id: string; title: string };
 type Team = { id: string; name: string; color: string };
@@ -12,7 +13,10 @@ export type MissionInitial = {
   submission_type: "text" | "photo" | "video";
   validation_mode: "auto" | "gm_judged";
   expected_answer: string | null;
-  prerequisite_mission_id: string | null;
+  /** Boolean unlock spec in disjunctive normal form. */
+  unlock_groups: string[][];
+  /** ISO-8601 timestamp; mission stays locked until this wall-clock time. */
+  unlock_after: string | null;
   assignment_mode: "all" | "specific";
   deadline_mode:
     | "absolute"
@@ -97,11 +101,6 @@ export default function MissionForm({
         { value: "auto", label: "Auto (exact answer)" },
         { value: "gm_judged", label: "GM judged" },
       ];
-
-  // Filter out the mission being edited from the prereq list
-  const prereqOptions = isEdit
-    ? missions.filter((m) => m.id !== missionId)
-    : missions;
 
   const initialTeamIdSet = new Set(initialTeamIds ?? []);
 
@@ -279,33 +278,30 @@ export default function MissionForm({
         </label>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-sm">Points</span>
-          <input
-            name="points"
-            type="number"
-            defaultValue={initial?.points ?? 10}
-            min={0}
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Unlocks after</span>
-          <select
-            name="prerequisite_mission_id"
-            defaultValue={initial?.prerequisite_mission_id ?? "none"}
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
-          >
-            <option value="none">— always available —</option>
-            {prereqOptions.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <label className="block max-w-[16rem]">
+        <span className="text-sm">Points</span>
+        <input
+          name="points"
+          type="number"
+          defaultValue={initial?.points ?? 10}
+          min={0}
+          className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+        />
+      </label>
+
+      {/* Unlock conditions: boolean DNF + optional time gate */}
+      <UnlockEditor
+        availableMissions={missions}
+        excludeMissionId={missionId}
+        initial={
+          initial
+            ? {
+                unlock_groups: initial.unlock_groups,
+                unlock_after: initial.unlock_after,
+              }
+            : undefined
+        }
+      />
 
       {/* Assignment */}
       <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">

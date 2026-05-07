@@ -20,6 +20,26 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+/**
+ * Compact one-line summary of a DNF unlock spec.
+ *
+ *   [["A"]]                -> "A"
+ *   [["A","B"]]            -> "A + B"
+ *   [["A"],["B"]]          -> "A or B"
+ *   [["A","B"],["C","D"]]  -> "A + B or C + D"
+ *
+ * Long titles get rendered as-is — the full picture is in the popup.
+ */
+function summarizeUnlockGroups(
+  groups: string[][],
+  titleById: Record<string, string>,
+): string {
+  if (groups.length === 0) return "";
+  return groups
+    .map((g) => g.map((id) => titleById[id] ?? "?").join(" + "))
+    .join(" or ");
+}
+
 export type SortableMission = {
   id: string;
   title: string;
@@ -27,7 +47,10 @@ export type SortableMission = {
   points: number;
   submission_type: "text" | "photo" | "video";
   validation_mode: "auto" | "gm_judged";
-  prerequisite_mission_id: string | null;
+  /** DNF unlock spec — list of AND groups; ANY group satisfies. */
+  unlock_groups: string[][];
+  /** Optional time gate — mission stays locked until this time. */
+  unlock_after: string | null;
   deadline_mode:
     | "absolute"
     | "relative_to_unlock"
@@ -215,12 +238,20 @@ function SortableMissionRow({
                 ? "all teams"
                 : `${m.assignment_count} team${m.assignment_count === 1 ? "" : "s"}`}
             </span>
-            {m.prerequisite_mission_id && (
+            {m.unlock_groups.length > 0 && (
               <>
                 {" "}
                 · requires{" "}
                 <span className="italic">
-                  {missionTitleById[m.prerequisite_mission_id] ?? "?"}
+                  {summarizeUnlockGroups(m.unlock_groups, missionTitleById)}
+                </span>
+              </>
+            )}
+            {m.unlock_after && (
+              <>
+                {" "}·{" "}
+                <span className="text-amber-700 dark:text-amber-300">
+                  not before {new Date(m.unlock_after).toLocaleString()}
                 </span>
               </>
             )}

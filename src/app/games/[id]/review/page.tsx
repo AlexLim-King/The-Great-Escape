@@ -42,9 +42,10 @@ export default async function ReviewPage(
   if (!game) notFound();
   if (game.owner_id !== user.id) redirect("/games");
 
-  // Lazy expiry sweep so any newly-overdue missions are reflected in
-  // counts/states before we render
-  await supabase.rpc("expire_overdue_missions_for_game", { p_game_id: id });
+  // Lazy refresh: expire overdue + recompute every team's unlocks so
+  // time gates and newly-satisfied DNF groups are reflected in counts
+  // and badges before we render.
+  await supabase.rpc("refresh_game_state", { p_game_id: id });
 
   // All submissions for this game (we tab/filter in-memory below).
   // The missions!inner join carries the full mission spec so the per-row
@@ -52,7 +53,7 @@ export default async function ReviewPage(
   const { data: allSubmissions } = await supabase
     .from("submissions")
     .select(
-      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(id, title, game_id, points, submission_type, description, validation_mode, expected_answer, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path), teams!inner(name, color)",
+      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(id, title, game_id, points, submission_type, description, validation_mode, expected_answer, unlock_groups, unlock_after, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path), teams!inner(name, color)",
     )
     .eq("missions.game_id", id)
     .order("created_at", { ascending: false });
@@ -100,6 +101,17 @@ export default async function ReviewPage(
       if (data?.signedUrl) referenceUrls.set(m.id, data.signedUrl);
     }
   }
+
+  // Title lookup for the inspector's unlock-groups display. We pull every
+  // mission in the game (cheap; bounded by mission count) so referenced
+  // prereqs are resolvable even if they aren't in the visible set.
+  const { data: gameMissions } = await supabase
+    .from("missions")
+    .select("id, title")
+    .eq("game_id", id);
+  const missionTitleById: Record<string, string> = Object.fromEntries(
+    (gameMissions ?? []).map((m) => [m.id, m.title]),
+  );
 
   // Look up submitter display names for the visible set
   const submitterNames = new Map<string, string>();
@@ -236,8 +248,12 @@ export default async function ReviewPage(
                       </span>
                       {mission ? (
                         <MissionInspector
-                          mission={mission}
+                          mission={{
+                            ...mission,
+                            unlock_groups: (mission.unlock_groups ?? []) as string[][],
+                          }}
                           referenceImageUrl={referenceUrls.get(mission.id)}
+                          missionTitleById={missionTitleById}
                         />
                       ) : (
                         <span>?</span>

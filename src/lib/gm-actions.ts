@@ -136,6 +136,76 @@ export async function deleteTeam(formData: FormData) {
 
 // ── Missions ─────────────────────────────────────────────────────────────────
 
+/**
+ * Parse the boolean unlock spec out of a mission form's FormData.
+ *
+ * Wire format:
+ *   unlock_groups   stringified JSON: array of arrays of mission UUIDs
+ *   unlock_after    datetime-local string (optional time gate)
+ *
+ * Returns the cleaned arrays plus an optional error string. Empty inner
+ * groups, duplicates within a group, and duplicate groups are silently
+ * dropped. Self-reference (a mission listed in its own unlock spec) is
+ * a hard error.
+ */
+function parseUnlockFromFormData(
+  formData: FormData,
+  excludeMissionId?: string,
+): {
+  unlock_groups: string[][];
+  unlock_after: string | null;
+  error?: string;
+} {
+  const after_raw = ((formData.get("unlock_after") as string) ?? "").trim();
+  const unlock_after = after_raw ? new Date(after_raw).toISOString() : null;
+
+  const groups_raw = (
+    (formData.get("unlock_groups") as string) ?? "[]"
+  ).trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(groups_raw);
+  } catch {
+    return {
+      unlock_groups: [],
+      unlock_after,
+      error: "Invalid unlock conditions.",
+    };
+  }
+  if (!Array.isArray(parsed)) {
+    return {
+      unlock_groups: [],
+      unlock_after,
+      error: "Unlock conditions must be a list.",
+    };
+  }
+
+  const cleaned: string[][] = [];
+  const seen = new Set<string>();
+  for (const g of parsed) {
+    if (!Array.isArray(g)) continue;
+    const ids = Array.from(
+      new Set(
+        g.filter((x): x is string => typeof x === "string" && x.length > 0),
+      ),
+    );
+    if (ids.length === 0) continue; // skip empty AND-groups
+    if (excludeMissionId && ids.includes(excludeMissionId)) {
+      return {
+        unlock_groups: [],
+        unlock_after,
+        error: "A mission can't appear in its own unlock conditions.",
+      };
+    }
+    const key = JSON.stringify([...ids].sort());
+    if (seen.has(key)) continue; // dedupe identical groups
+    seen.add(key);
+    cleaned.push(ids);
+  }
+
+  return { unlock_groups: cleaned, unlock_after };
+}
+
 export async function createMission(formData: FormData) {
   const { supabase } = await requireUser();
   const game_id = formData.get("game_id") as string;
@@ -150,8 +220,15 @@ export async function createMission(formData: FormData) {
   const validation_mode = formData.get("validation_mode") as "auto" | "gm_judged";
   const expected_answer =
     ((formData.get("expected_answer") as string) ?? "").trim() || null;
-  const prereq_raw = (formData.get("prerequisite_mission_id") as string) || "";
-  const prerequisite_mission_id = prereq_raw && prereq_raw !== "none" ? prereq_raw : null;
+
+  // Boolean unlock expression + optional time gate
+  const unlockParsed = parseUnlockFromFormData(formData);
+  if (unlockParsed.error) {
+    redirect(
+      `/games/${game_id}/missions/new?error=${encodeURIComponent(unlockParsed.error)}`,
+    );
+  }
+  const { unlock_groups, unlock_after } = unlockParsed;
 
   // Assignment
   const assignment_mode = (formData.get("assignment_mode") as
@@ -258,7 +335,8 @@ export async function createMission(formData: FormData) {
       submission_type,
       validation_mode,
       expected_answer,
-      prerequisite_mission_id,
+      unlock_groups,
+      unlock_after,
       deadline_mode,
       deadline_at,
       deadline_duration_sec,
@@ -343,9 +421,15 @@ export async function updateMission(formData: FormData) {
     | "gm_judged";
   const expected_answer =
     ((formData.get("expected_answer") as string) ?? "").trim() || null;
-  const prereq_raw = (formData.get("prerequisite_mission_id") as string) || "";
-  const prerequisite_mission_id =
-    prereq_raw && prereq_raw !== "none" ? prereq_raw : null;
+
+  // Boolean unlock expression + optional time gate, with self-reference guard
+  const unlockParsed = parseUnlockFromFormData(formData, mission_id);
+  if (unlockParsed.error) {
+    redirect(
+      `/games/${game_id}/missions/${mission_id}/edit?error=${encodeURIComponent(unlockParsed.error)}`,
+    );
+  }
+  const { unlock_groups, unlock_after } = unlockParsed;
 
   const assignment_mode =
     ((formData.get("assignment_mode") as "all" | "specific") || "all");
@@ -439,7 +523,7 @@ export async function updateMission(formData: FormData) {
   // the GM picks Replace or Remove.
   const { data: existing } = await supabase
     .from("missions")
-    .select("reference_image_path, game_id, prerequisite_mission_id")
+    .select("reference_image_path, game_id")
     .eq("id", mission_id)
     .single();
 
@@ -447,14 +531,8 @@ export async function updateMission(formData: FormData) {
   if (existing.game_id !== game_id) {
     redirect(`/games/${game_id}?error=Mission+belongs+to+another+game`);
   }
-  // Don't allow self-prerequisite (cycle of one)
-  if (prerequisite_mission_id === mission_id) {
-    redirect(
-      `${editPath}?error=${encodeURIComponent(
-        "A mission can't be its own prerequisite.",
-      )}`,
-    );
-  }
+  // Self-reference in unlock_groups was already rejected by
+  // parseUnlockFromFormData (excludeMissionId=mission_id) above.
 
   // Decide the new reference_image_path value (and any storage cleanup)
   let new_reference_image_path: string | null | undefined;
@@ -509,7 +587,8 @@ export async function updateMission(formData: FormData) {
     submission_type,
     validation_mode,
     expected_answer,
-    prerequisite_mission_id,
+    unlock_groups,
+    unlock_after,
     assignment_mode,
     deadline_mode,
     deadline_at,

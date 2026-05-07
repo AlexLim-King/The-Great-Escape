@@ -17,6 +17,8 @@ export type InspectorMission = {
     | null;
   deadline_at: string | null;
   deadline_duration_sec: number | null;
+  unlock_groups: string[][];
+  unlock_after: string | null;
 };
 
 /**
@@ -30,9 +32,12 @@ export type InspectorMission = {
 export default function MissionInspector({
   mission,
   referenceImageUrl,
+  missionTitleById,
 }: {
   mission: InspectorMission;
   referenceImageUrl?: string | null;
+  /** Map of mission id -> title; used to render names in unlock groups. */
+  missionTitleById?: Record<string, string>;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -178,6 +183,55 @@ export default function MissionInspector({
                     </dd>
                   </>
                 )}
+
+              {(mission.unlock_groups.length > 0 || mission.unlock_after) && (
+                <>
+                  <dt className="text-black/55 dark:text-white/55">Unlocks</dt>
+                  <dd>
+                    {mission.unlock_after && (
+                      <p className="text-amber-700 dark:text-amber-300">
+                        🕒 not before{" "}
+                        {new Date(mission.unlock_after).toLocaleString()}
+                      </p>
+                    )}
+                    {mission.unlock_groups.length === 0 ? (
+                      mission.unlock_after && (
+                        <p className="text-black/60 dark:text-white/60 text-xs mt-0.5">
+                          Available immediately at that time.
+                        </p>
+                      )
+                    ) : (
+                      <ul className="space-y-1 mt-0.5">
+                        {mission.unlock_groups.map((group, gi) => (
+                          <li key={gi} className="text-sm">
+                            <span className="text-black/55 dark:text-white/55">
+                              {gi === 0 ? "after " : "or after "}
+                            </span>
+                            {group.length === 0 ? (
+                              <em className="text-black/40 dark:text-white/40">
+                                (empty group)
+                              </em>
+                            ) : (
+                              group.map((mid, mi) => (
+                                <span key={mid}>
+                                  {mi > 0 && (
+                                    <span className="text-black/40 dark:text-white/40">
+                                      {" + "}
+                                    </span>
+                                  )}
+                                  <span className="italic">
+                                    {missionTitleById?.[mid] ?? "?"}
+                                  </span>
+                                </span>
+                              ))
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </dd>
+                </>
+              )}
 
               {deadlineLabel && (
                 <>

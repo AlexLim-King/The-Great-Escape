@@ -36,7 +36,7 @@ export default async function EditMissionPage(
     supabase
       .from("missions")
       .select(
-        "id, game_id, title, description, points, submission_type, validation_mode, expected_answer, prerequisite_mission_id, assignment_mode, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path",
+        "id, game_id, title, description, points, submission_type, validation_mode, expected_answer, unlock_groups, unlock_after, assignment_mode, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path",
       )
       .eq("id", missionId)
       .single(),
@@ -68,8 +68,9 @@ export default async function EditMissionPage(
     referenceUrl = data?.signedUrl ?? null;
   }
 
-  // Generated DB types widen the enum-like columns to plain `string`.
-  // The CHECK constraints guarantee the runtime values, so narrow here.
+  // Generated DB types widen the enum-like columns to plain `string` and
+  // `unlock_groups` to Json. The CHECK constraint and the migration
+  // guarantee the runtime shapes; narrow here.
   const initial: MissionInitial = {
     title: mission.title,
     description: mission.description,
@@ -77,7 +78,8 @@ export default async function EditMissionPage(
     submission_type: mission.submission_type as MissionInitial["submission_type"],
     validation_mode: mission.validation_mode as MissionInitial["validation_mode"],
     expected_answer: mission.expected_answer,
-    prerequisite_mission_id: mission.prerequisite_mission_id,
+    unlock_groups: (mission.unlock_groups ?? []) as string[][],
+    unlock_after: mission.unlock_after,
     assignment_mode: mission.assignment_mode as MissionInitial["assignment_mode"],
     deadline_mode: mission.deadline_mode as MissionInitial["deadline_mode"],
     deadline_at: mission.deadline_at,

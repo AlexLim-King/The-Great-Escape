@@ -116,10 +116,11 @@ export type Database = {
           game_id: string
           id: string
           points: number
-          prerequisite_mission_id: string | null
           reference_image_path: string | null
           submission_type: string
           title: string
+          unlock_after: string | null
+          unlock_groups: Json
           validation_mode: string
         }
         Insert: {
@@ -134,10 +135,11 @@ export type Database = {
           game_id: string
           id?: string
           points?: number
-          prerequisite_mission_id?: string | null
           reference_image_path?: string | null
           submission_type: string
           title: string
+          unlock_after?: string | null
+          unlock_groups?: Json
           validation_mode: string
         }
         Update: {
@@ -152,10 +154,11 @@ export type Database = {
           game_id?: string
           id?: string
           points?: number
-          prerequisite_mission_id?: string | null
           reference_image_path?: string | null
           submission_type?: string
           title?: string
+          unlock_after?: string | null
+          unlock_groups?: Json
           validation_mode?: string
         }
         Relationships: [
@@ -164,13 +167,6 @@ export type Database = {
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "missions_prerequisite_mission_id_fkey"
-            columns: ["prerequisite_mission_id"]
-            isOneToOne: false
-            referencedRelation: "missions"
             referencedColumns: ["id"]
           },
         ]
@@ -395,6 +391,7 @@ export type Database = {
         Args: { p_team_id: string }
         Returns: undefined
       }
+      refresh_game_state: { Args: { p_game_id: string }; Returns: undefined }
       reorder_missions: {
         Args: { p_game_id: string; p_ids: string[] }
         Returns: undefined
