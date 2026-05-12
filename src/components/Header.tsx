@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth-actions";
+import NotificationBell from "@/components/NotificationBell";
 
 export default async function Header() {
   const supabase = await createClient();
@@ -35,6 +36,7 @@ export default async function Header() {
               <Link href="/play" className="hover:underline">
                 Join
               </Link>
+              <NotificationBell userId={user.id} />
               <span className="text-black/60 dark:text-white/60">
                 {user.is_anonymous ? `${displayName} (guest)` : displayName}
               </span>

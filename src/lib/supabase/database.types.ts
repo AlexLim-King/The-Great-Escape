@@ -117,6 +117,7 @@ export type Database = {
           id: string
           points: number
           reference_image_path: string | null
+          reference_links: Json
           submission_type: string
           title: string
           unlock_after: string | null
@@ -136,6 +137,7 @@ export type Database = {
           id?: string
           points?: number
           reference_image_path?: string | null
+          reference_links?: Json
           submission_type: string
           title: string
           unlock_after?: string | null
@@ -155,6 +157,7 @@ export type Database = {
           id?: string
           points?: number
           reference_image_path?: string | null
+          reference_links?: Json
           submission_type?: string
           title?: string
           unlock_after?: string | null
@@ -164,6 +167,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "missions_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          game_id: string | null
+          href: string | null
+          id: string
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          game_id?: string | null
+          href?: string | null
+          id?: string
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          game_id?: string | null
+          href?: string | null
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_game_id_fkey"
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"

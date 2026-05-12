@@ -137,6 +137,49 @@ export async function deleteTeam(formData: FormData) {
 // ── Missions ─────────────────────────────────────────────────────────────────
 
 /**
+ * Parse the optional reference-links list out of a mission form's
+ * FormData. Drops rows with empty url, accepts http/https only,
+ * deduplicates by URL, caps at 10 to avoid abuse.
+ */
+function parseReferenceLinksFromFormData(
+  formData: FormData,
+): { reference_links: { label: string; url: string }[]; error?: string } {
+  const raw = ((formData.get("reference_links") as string) ?? "[]").trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { reference_links: [], error: "Invalid reference links." };
+  }
+  if (!Array.isArray(parsed)) {
+    return { reference_links: [], error: "Reference links must be a list." };
+  }
+
+  const cleaned: { label: string; url: string }[] = [];
+  const seenUrls = new Set<string>();
+  for (const row of parsed) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const label = typeof r.label === "string" ? r.label.trim() : "";
+    const url = typeof r.url === "string" ? r.url.trim() : "";
+    if (!url) continue;
+    // Only accept http/https — block javascript:, data:, etc.
+    if (!/^https?:\/\//i.test(url)) {
+      return {
+        reference_links: [],
+        error: "Links must start with http:// or https://",
+      };
+    }
+    if (seenUrls.has(url)) continue;
+    seenUrls.add(url);
+    cleaned.push({ label: label || url, url });
+    if (cleaned.length >= 10) break;
+  }
+
+  return { reference_links: cleaned };
+}
+
+/**
  * Parse the boolean unlock spec out of a mission form's FormData.
  *
  * Wire format:
@@ -229,6 +272,15 @@ export async function createMission(formData: FormData) {
     );
   }
   const { unlock_groups, unlock_after } = unlockParsed;
+
+  // Reference links
+  const linksParsed = parseReferenceLinksFromFormData(formData);
+  if (linksParsed.error) {
+    redirect(
+      `/games/${game_id}/missions/new?error=${encodeURIComponent(linksParsed.error)}`,
+    );
+  }
+  const { reference_links } = linksParsed;
 
   // Assignment
   const assignment_mode = (formData.get("assignment_mode") as
@@ -337,6 +389,7 @@ export async function createMission(formData: FormData) {
       expected_answer,
       unlock_groups,
       unlock_after,
+      reference_links,
       deadline_mode,
       deadline_at,
       deadline_duration_sec,
@@ -430,6 +483,15 @@ export async function updateMission(formData: FormData) {
     );
   }
   const { unlock_groups, unlock_after } = unlockParsed;
+
+  // Reference links
+  const linksParsed = parseReferenceLinksFromFormData(formData);
+  if (linksParsed.error) {
+    redirect(
+      `/games/${game_id}/missions/${mission_id}/edit?error=${encodeURIComponent(linksParsed.error)}`,
+    );
+  }
+  const { reference_links } = linksParsed;
 
   const assignment_mode =
     ((formData.get("assignment_mode") as "all" | "specific") || "all");
@@ -589,6 +651,7 @@ export async function updateMission(formData: FormData) {
     expected_answer,
     unlock_groups,
     unlock_after,
+    reference_links,
     assignment_mode,
     deadline_mode,
     deadline_at,

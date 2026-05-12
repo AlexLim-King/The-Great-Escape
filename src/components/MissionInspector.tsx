@@ -19,6 +19,7 @@ export type InspectorMission = {
   deadline_duration_sec: number | null;
   unlock_groups: string[][];
   unlock_after: string | null;
+  reference_links: { label: string; url: string }[];
 };
 
 /**
@@ -155,6 +156,42 @@ export default function MissionInspector({
               <p className="text-sm italic text-black/50 dark:text-white/50">
                 No description.
               </p>
+            )}
+
+            {mission.reference_links.length > 0 && (
+              <div>
+                <p className="text-xs text-black/55 dark:text-white/55 mb-1.5">
+                  Reference links
+                </p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {mission.reference_links.map((l, i) => (
+                    <li key={i}>
+                      <a
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded border border-black/15 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                        {l.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">

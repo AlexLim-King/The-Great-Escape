@@ -28,7 +28,7 @@ export default async function SubmitMissionPage(
   const { data: mission } = await supabase
     .from("missions")
     .select(
-      "id, title, description, points, submission_type, validation_mode, reference_image_path, game_id",
+      "id, title, description, points, submission_type, validation_mode, reference_image_path, reference_links, game_id",
     )
     .eq("id", missionId)
     .single();
@@ -118,6 +118,47 @@ export default async function SubmitMissionPage(
           className="mt-4 w-full rounded border border-black/10 dark:border-white/10"
         />
       )}
+
+      {(() => {
+        const links =
+          (mission.reference_links ?? []) as { label: string; url: string }[];
+        if (links.length === 0) return null;
+        return (
+          <div className="mt-4">
+            <p className="text-xs text-black/55 dark:text-white/55 mb-1.5">
+              References
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
+              {links.map((l, i) => (
+                <li key={i}>
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded border border-black/15 dark:border-white/15 px-2.5 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {error && (
         <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mt-4">

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import UnlockEditor from "./UnlockEditor";
+import ReferenceLinksEditor, {
+  type ReferenceLink,
+} from "./ReferenceLinksEditor";
 
 type Mission = { id: string; title: string };
 type Team = { id: string; name: string; color: string };
@@ -17,6 +20,8 @@ export type MissionInitial = {
   unlock_groups: string[][];
   /** ISO-8601 timestamp; mission stays locked until this wall-clock time. */
   unlock_after: string | null;
+  /** External reference URLs shown to players on the mission detail page. */
+  reference_links: ReferenceLink[];
   assignment_mode: "all" | "specific";
   deadline_mode:
     | "absolute"
@@ -228,6 +233,8 @@ export default function MissionForm({
           </span>
         </label>
       )}
+
+      <ReferenceLinksEditor initial={initial?.reference_links} />
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">

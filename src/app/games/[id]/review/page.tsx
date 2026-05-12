@@ -53,7 +53,7 @@ export default async function ReviewPage(
   const { data: allSubmissions } = await supabase
     .from("submissions")
     .select(
-      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(id, title, game_id, points, submission_type, description, validation_mode, expected_answer, unlock_groups, unlock_after, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path), teams!inner(name, color)",
+      "id, status, payload_text, media_path, bonus_points, feedback, created_at, verified_at, mission_id, team_id, submitted_by, missions!inner(id, title, game_id, points, submission_type, description, validation_mode, expected_answer, unlock_groups, unlock_after, reference_links, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path), teams!inner(name, color)",
     )
     .eq("missions.game_id", id)
     .order("created_at", { ascending: false });
@@ -251,6 +251,7 @@ export default async function ReviewPage(
                           mission={{
                             ...mission,
                             unlock_groups: (mission.unlock_groups ?? []) as string[][],
+                            reference_links: (mission.reference_links ?? []) as { label: string; url: string }[],
                           }}
                           referenceImageUrl={referenceUrls.get(mission.id)}
                           missionTitleById={missionTitleById}

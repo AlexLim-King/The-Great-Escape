@@ -36,7 +36,7 @@ export default async function EditMissionPage(
     supabase
       .from("missions")
       .select(
-        "id, game_id, title, description, points, submission_type, validation_mode, expected_answer, unlock_groups, unlock_after, assignment_mode, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path",
+        "id, game_id, title, description, points, submission_type, validation_mode, expected_answer, unlock_groups, unlock_after, reference_links, assignment_mode, deadline_mode, deadline_at, deadline_duration_sec, reference_image_path",
       )
       .eq("id", missionId)
       .single(),
@@ -80,6 +80,7 @@ export default async function EditMissionPage(
     expected_answer: mission.expected_answer,
     unlock_groups: (mission.unlock_groups ?? []) as string[][],
     unlock_after: mission.unlock_after,
+    reference_links: (mission.reference_links ?? []) as MissionInitial["reference_links"],
     assignment_mode: mission.assignment_mode as MissionInitial["assignment_mode"],
     deadline_mode: mission.deadline_mode as MissionInitial["deadline_mode"],
     deadline_at: mission.deadline_at,
