@@ -1,7 +1,7 @@
 # Escape Room Mission Platform — Phase 1 prototype
 
 A web-based, mobile-first platform for hosting escape-room-style scavenger-hunt
-games. See [`../PRD.md`](../PRD.md) for the full product spec. This folder
+games. See [`./PRD.md`](./PRD.md) for the full product spec. This folder
 implements **Phase 1** of the rollout: text + photo missions, linear
 prerequisites, manual team setup, GM judging.
 
@@ -132,7 +132,7 @@ escape-room/
 - Live realtime leaderboard
 - Per-team color-themed mission view
 
-See `../PRD.md` §8 for the full Phase 2 list.
+See `./PRD.md` §8 for the full Phase 2 list.
 
 ## Common commands
 
