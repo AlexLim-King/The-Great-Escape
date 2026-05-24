@@ -79,7 +79,7 @@ export default function MissionInspector({
         // on the dialog lets every descendant inherit cleanly.
         // backdrop:* targets the ::backdrop pseudo for the dimmed overlay.
         className="
-          m-auto p-0 bg-transparent text-foreground
+          m-auto p-0 bg-transparent text-text
           backdrop:bg-black/50 backdrop:backdrop-blur-sm
           max-w-lg w-[calc(100%-2rem)]
           open:animate-in
@@ -92,15 +92,15 @@ export default function MissionInspector({
       >
         <div
           className="
-            rounded-xl border border-black/10 dark:border-white/15
-            bg-background shadow-2xl
+            rounded-xl border border-default
+            bg-surface shadow-2xl
             max-h-[85vh] overflow-y-auto
           "
         >
           {/* Header */}
-          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-black/10 dark:border-white/10 sticky top-0 bg-background">
+          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default sticky top-0 bg-surface">
             <div>
-              <p className="text-xs uppercase tracking-wide text-black/50 dark:text-white/50">
+              <p className="text-xs uppercase tracking-wider text-subtle font-medium">
                 Mission spec
               </p>
               <h2 className="text-lg font-semibold mt-0.5">{mission.title}</h2>
@@ -109,7 +109,7 @@ export default function MissionInspector({
               type="button"
               onClick={close}
               aria-label="Close"
-              className="rounded p-1 text-black/60 dark:text-white/60 hover:bg-black/5 dark:hover:bg-white/10"
+              className="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-text transition-colors"
             >
               <svg
                 width="20"
@@ -131,38 +131,30 @@ export default function MissionInspector({
           <div className="px-5 py-4 space-y-4">
             {referenceImageUrl && (
               <div>
-                <p className="text-xs text-black/55 dark:text-white/55 mb-1.5">
-                  Reference image
-                </p>
+                <p className="text-xs text-muted mb-1.5">Reference image</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={referenceImageUrl}
                   alt="Reference"
-                  className="w-full max-h-72 object-contain rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5"
+                  className="w-full max-h-72 object-contain rounded-md border border-default bg-surface-muted"
                 />
               </div>
             )}
 
             {mission.description ? (
               <div>
-                <p className="text-xs text-black/55 dark:text-white/55 mb-1">
-                  Description / clue
-                </p>
+                <p className="text-xs text-muted mb-1">Description / clue</p>
                 <p className="text-sm whitespace-pre-wrap">
                   {mission.description}
                 </p>
               </div>
             ) : (
-              <p className="text-sm italic text-black/50 dark:text-white/50">
-                No description.
-              </p>
+              <p className="text-sm italic text-subtle">No description.</p>
             )}
 
             {mission.reference_links.length > 0 && (
               <div>
-                <p className="text-xs text-black/55 dark:text-white/55 mb-1.5">
-                  Reference links
-                </p>
+                <p className="text-xs text-muted mb-1.5">Reference links</p>
                 <ul className="flex flex-wrap gap-1.5">
                   {mission.reference_links.map((l, i) => (
                     <li key={i}>
@@ -170,7 +162,7 @@ export default function MissionInspector({
                         href={l.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded border border-black/15 dark:border-white/15 px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                        className="inline-flex items-center gap-1 rounded-md border border-strong px-2 py-1 text-xs hover:bg-surface-hover transition-colors"
                       >
                         <svg
                           width="12"
@@ -195,13 +187,13 @@ export default function MissionInspector({
             )}
 
             <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-black/55 dark:text-white/55">Points</dt>
+              <dt className="text-muted">Points</dt>
               <dd className="font-mono">{mission.points}</dd>
 
-              <dt className="text-black/55 dark:text-white/55">Submission</dt>
+              <dt className="text-muted">Submission</dt>
               <dd>{mission.submission_type}</dd>
 
-              <dt className="text-black/55 dark:text-white/55">Validation</dt>
+              <dt className="text-muted">Validation</dt>
               <dd>
                 {mission.validation_mode === "auto"
                   ? "Auto (exact answer)"
@@ -212,9 +204,7 @@ export default function MissionInspector({
                 mission.submission_type === "text" &&
                 mission.expected_answer && (
                   <>
-                    <dt className="text-black/55 dark:text-white/55">
-                      Expected answer
-                    </dt>
+                    <dt className="text-muted">Expected answer</dt>
                     <dd className="font-mono break-all">
                       {mission.expected_answer}
                     </dd>
@@ -223,17 +213,17 @@ export default function MissionInspector({
 
               {(mission.unlock_groups.length > 0 || mission.unlock_after) && (
                 <>
-                  <dt className="text-black/55 dark:text-white/55">Unlocks</dt>
+                  <dt className="text-muted">Unlocks</dt>
                   <dd>
                     {mission.unlock_after && (
-                      <p className="text-amber-700 dark:text-amber-300">
+                      <p className="text-warn">
                         🕒 not before{" "}
                         {new Date(mission.unlock_after).toLocaleString()}
                       </p>
                     )}
                     {mission.unlock_groups.length === 0 ? (
                       mission.unlock_after && (
-                        <p className="text-black/60 dark:text-white/60 text-xs mt-0.5">
+                        <p className="text-muted text-xs mt-0.5">
                           Available immediately at that time.
                         </p>
                       )
@@ -241,18 +231,16 @@ export default function MissionInspector({
                       <ul className="space-y-1 mt-0.5">
                         {mission.unlock_groups.map((group, gi) => (
                           <li key={gi} className="text-sm">
-                            <span className="text-black/55 dark:text-white/55">
+                            <span className="text-muted">
                               {gi === 0 ? "after " : "or after "}
                             </span>
                             {group.length === 0 ? (
-                              <em className="text-black/40 dark:text-white/40">
-                                (empty group)
-                              </em>
+                              <em className="text-subtle">(empty group)</em>
                             ) : (
                               group.map((mid, mi) => (
                                 <span key={mid}>
                                   {mi > 0 && (
-                                    <span className="text-black/40 dark:text-white/40">
+                                    <span className="text-subtle">
                                       {" + "}
                                     </span>
                                   )}
@@ -272,21 +260,19 @@ export default function MissionInspector({
 
               {deadlineLabel && (
                 <>
-                  <dt className="text-black/55 dark:text-white/55">Deadline</dt>
-                  <dd className="text-amber-700 dark:text-amber-300">
-                    {deadlineLabel}
-                  </dd>
+                  <dt className="text-muted">Deadline</dt>
+                  <dd className="text-warn">{deadlineLabel}</dd>
                 </>
               )}
             </dl>
           </div>
 
           {/* Footer */}
-          <div className="px-5 py-3 border-t border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] flex justify-end">
+          <div className="px-5 py-3 border-t border-default bg-surface-muted flex justify-end">
             <button
               type="button"
               onClick={close}
-              className="rounded border border-black/15 dark:border-white/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+              className="btn btn-secondary btn-sm"
             >
               Close
             </button>

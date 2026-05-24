@@ -1,26 +1,453 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================================
+   Theme token system — Editorial Modern (bold)
+   ----------------------------------------------------------------------------
+   Every visual choice (color, radius, font, shadow) is a CSS variable. The
+   default theme is "Editorial Modern" — clean SaaS neutrals with a strong
+   indigo accent. Dark mode picks up a subtle blue-purple undertone so it
+   reads as "designed dark" not "inverted black-and-white."
+   To add a new theme later, override these variables under a selector like
+   [data-theme="mission-control"] and toggle the attribute on <html>.
+   Components should *never* hardcode colors — use the Tailwind utilities
+   (bg-surface, text-muted, etc.) that map to these tokens, or the
+   .btn / .pill / .card / .input helpers below.
+   ============================================================================ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  /* Surfaces — light mode */
+  --color-bg:            #f7f7fb;
+  --color-surface:       #ffffff;
+  --color-surface-muted: #f1f1f6;
+  --color-surface-hover: #ececf3;
+
+  /* Text */
+  --color-text:          #09090b;
+  --color-text-muted:    #52525b;
+  --color-text-subtle:   #71717a;
+
+  /* Borders */
+  --color-border:        #e4e4e7;
+  --color-border-strong: #d4d4d8;
+
+  /* Brand accent — indigo, strong presence */
+  --color-accent:        #4f46e5;
+  --color-accent-hover:  #4338ca;
+  --color-accent-fg:     #ffffff;
+  --color-accent-soft:   #eef2ff;
+  --color-accent-soft-fg:#3730a3;
+
+  /* Secondary accent (used in gradients + leaderboard accents) */
+  --color-accent-2:      #06b6d4;
+
+  /* Semantic status */
+  --color-success:       #047857;
+  --color-success-soft:  #d1fae5;
+  --color-success-soft-fg:#065f46;
+
+  --color-warn:          #b45309;
+  --color-warn-soft:     #fef3c7;
+  --color-warn-soft-fg:  #92400e;
+
+  --color-danger:        #b91c1c;
+  --color-danger-soft:   #fee2e2;
+  --color-danger-soft-fg:#991b1b;
+
+  --color-info:          #1d4ed8;
+  --color-info-soft:     #dbeafe;
+  --color-info-soft-fg:  #1e40af;
+
+  /* Focus ring */
+  --color-focus:         #818cf8;
+
+  /* Radii */
+  --radius-sm:           0.375rem;
+  --radius:              0.5rem;
+  --radius-lg:           0.75rem;
+  --radius-xl:           1rem;
+
+  /* Shadows — give cards real elevation */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --shadow:    0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 24px -6px rgb(0 0 0 / 0.10), 0 4px 8px -2px rgb(0 0 0 / 0.06);
+  --shadow-accent: 0 6px 20px -6px color-mix(in oklab, var(--color-accent) 55%, transparent);
+
+  /* Signature gradient — used on hero, header rule, big CTAs */
+  --gradient-brand: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Surfaces — dark mode with subtle blue-purple undertone so it doesn't
+       read as pure black-on-white. Surfaces are clearly lifted from bg. */
+    --color-bg:            #0b0b14;
+    --color-surface:       #16161f;
+    --color-surface-muted: #1f1f2b;
+    --color-surface-hover: #262633;
+
+    --color-text:          #f3f4f6;
+    --color-text-muted:    #a1a1aa;
+    --color-text-subtle:   #71717a;
+
+    --color-border:        #2a2a37;
+    --color-border-strong: #3f3f52;
+
+    /* Brighter accent in dark mode for real presence */
+    --color-accent:        #a5b4fc;
+    --color-accent-hover:  #c7d2fe;
+    --color-accent-fg:     #0b0b14;
+    --color-accent-soft:   #1e1b4b;
+    --color-accent-soft-fg:#c7d2fe;
+
+    --color-accent-2:      #67e8f9;
+
+    --color-success:       #34d399;
+    --color-success-soft:  #064e3b;
+    --color-success-soft-fg:#a7f3d0;
+
+    --color-warn:          #fbbf24;
+    --color-warn-soft:     #422006;
+    --color-warn-soft-fg:  #fcd34d;
+
+    --color-danger:        #f87171;
+    --color-danger-soft:   #450a0a;
+    --color-danger-soft-fg:#fecaca;
+
+    --color-info:          #93c5fd;
+    --color-info-soft:     #172554;
+    --color-info-soft-fg:  #bfdbfe;
+
+    --color-focus:         #a5b4fc;
+
+    /* Dark-mode shadows lean on translucent black PLUS an accent glow */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.40);
+    --shadow:    0 4px 12px -2px rgb(0 0 0 / 0.50);
+    --shadow-lg: 0 14px 28px -8px rgb(0 0 0 / 0.60);
+    --shadow-accent: 0 8px 30px -10px color-mix(in oklab, var(--color-accent) 50%, transparent);
   }
 }
 
+/* ----------------------------------------------------------------------------
+   Theme: "matrix" — green-on-black hacker / CRT / CLI. Applied per-game by
+   setting data-theme="matrix" on a wrapper around the player surface (see
+   play/[code]/layout.tsx). Overrides the same token vars + switches to a
+   monospace face with a soft phosphor glow.
+   ---------------------------------------------------------------------------- */
+[data-theme="matrix"] {
+  --color-bg:            #000800;
+  --color-surface:       #0a140a;
+  --color-surface-muted: #0f1e0f;
+  --color-surface-hover: #153015;
+
+  --color-text:          #4dff7a;
+  --color-text-muted:    #2fb154;
+  --color-text-subtle:   #1f8038;
+
+  --color-border:        #1c401c;
+  --color-border-strong: #2c5e2c;
+
+  --color-accent:        #39ff14;
+  --color-accent-hover:  #7dff66;
+  --color-accent-fg:     #001400;
+  --color-accent-soft:   #0d2a0d;
+  --color-accent-soft-fg:#9dff9d;
+  --color-accent-2:      #00ffae;
+
+  --color-success:       #39ff14;
+  --color-success-soft:  #0d2a0d;
+  --color-success-soft-fg:#9dff9d;
+
+  --color-warn:          #d4ff3a;
+  --color-warn-soft:     #20280a;
+  --color-warn-soft-fg:  #e9ff8f;
+
+  --color-danger:        #ff5f56;
+  --color-danger-soft:   #2a0d0d;
+  --color-danger-soft-fg:#ff9e99;
+
+  --color-info:          #39ff14;
+  --color-info-soft:     #0d2a0d;
+  --color-info-soft-fg:  #9dff9d;
+
+  --color-focus:         #39ff14;
+
+  /* CRT feel: monospace everywhere + a faint phosphor glow on text. */
+  font-family: var(--font-mono);
+  text-shadow: 0 0 2px color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+/* Scanline overlay for the CRT look — sits above content, ignores input. */
+[data-theme="matrix"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.28) 3px
+  );
+}
+
+/* Expose tokens as Tailwind utilities. The `--color-*` keys here become
+   classes like `bg-surface`, `text-muted`, `border-default`, `text-accent`. */
+@theme inline {
+  --color-bg:             var(--color-bg);
+  --color-surface:        var(--color-surface);
+  --color-surface-muted:  var(--color-surface-muted);
+  --color-surface-hover:  var(--color-surface-hover);
+
+  --color-text:           var(--color-text);
+  --color-muted:          var(--color-text-muted);
+  --color-subtle:         var(--color-text-subtle);
+
+  --color-default:        var(--color-border);
+  --color-strong:         var(--color-border-strong);
+
+  --color-accent:         var(--color-accent);
+  --color-accent-hover:   var(--color-accent-hover);
+  --color-accent-fg:      var(--color-accent-fg);
+  --color-accent-soft:    var(--color-accent-soft);
+  --color-accent-soft-fg: var(--color-accent-soft-fg);
+  --color-accent-2:       var(--color-accent-2);
+
+  --color-success:        var(--color-success);
+  --color-success-soft:   var(--color-success-soft);
+  --color-success-soft-fg:var(--color-success-soft-fg);
+  --color-warn:           var(--color-warn);
+  --color-warn-soft:      var(--color-warn-soft);
+  --color-warn-soft-fg:   var(--color-warn-soft-fg);
+  --color-danger:         var(--color-danger);
+  --color-danger-soft:    var(--color-danger-soft);
+  --color-danger-soft-fg: var(--color-danger-soft-fg);
+  --color-info:           var(--color-info);
+  --color-info-soft:      var(--color-info-soft);
+  --color-info-soft-fg:   var(--color-info-soft-fg);
+
+  --color-focus:          var(--color-focus);
+
+  /* Legacy aliases — keep working while pages are migrated. */
+  --color-background:     var(--color-bg);
+  --color-foreground:     var(--color-text);
+
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-sm: var(--radius-sm);
+  --radius:    var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow:    var(--shadow);
+  --shadow-lg: var(--shadow-lg);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+/* Subtle background flourish — a soft radial glow at the top of every
+   page. Doesn't interfere with content but makes "the canvas" feel
+   intentional, not blank-default. */
+body::before {
+  content: "";
+  position: fixed;
+  top: -20vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80vw;
+  max-width: 1200px;
+  height: 60vh;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--color-accent) 12%, transparent) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Keyboard focus is always visible. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================================
+   Reusable component utilities
+   ============================================================================ */
+
+@layer components {
+  /* ---- Buttons ---------------------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    transition: background-color 120ms ease, border-color 120ms ease,
+                color 120ms ease, box-shadow 160ms ease,
+                transform 80ms ease;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(0.5px);
+  }
+  .btn-sm { padding: 0.25rem 0.75rem; font-size: 0.8125rem; }
+  .btn-lg { padding: 0.75rem 1.25rem; font-size: 0.95rem; }
+
+  .btn-primary {
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    box-shadow: var(--shadow-sm), 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    box-shadow: var(--shadow-accent);
+  }
+
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-color: var(--color-border-strong);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+    border-color: var(--color-accent);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-text);
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--color-surface-hover); }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: #ffffff;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+
+  .btn-link {
+    background: transparent;
+    color: var(--color-accent);
+    padding: 0;
+    border-radius: 0;
+  }
+  .btn-link:hover:not(:disabled) { text-decoration: underline; }
+
+  /* ---- Inputs ----------------------------------------------------------- */
+  .input,
+  .textarea,
+  .select {
+    width: 100%;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .input::placeholder,
+  .textarea::placeholder { color: var(--color-text-subtle); }
+  .input:focus,
+  .textarea:focus,
+  .select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 25%, transparent);
+  }
+
+  /* ---- Card ------------------------------------------------------------- */
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .card-compact { padding: 0.75rem; }
+  .card-interactive {
+    transition: border-color 160ms ease, box-shadow 160ms ease,
+                transform 160ms ease;
+  }
+  .card-interactive:hover {
+    border-color: var(--color-accent);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  /* ---- Pills (status badges) ------------------------------------------- */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1rem;
+    white-space: nowrap;
+  }
+  .pill-success { background: var(--color-success-soft); color: var(--color-success-soft-fg); }
+  .pill-warn    { background: var(--color-warn-soft);    color: var(--color-warn-soft-fg); }
+  .pill-danger  { background: var(--color-danger-soft);  color: var(--color-danger-soft-fg); }
+  .pill-info    { background: var(--color-info-soft);    color: var(--color-info-soft-fg); }
+  .pill-accent  { background: var(--color-accent-soft);  color: var(--color-accent-soft-fg); }
+  .pill-neutral { background: var(--color-surface-muted); color: var(--color-text-muted); }
+
+  /* ---- Inline banners / flash messages -------------------------------- */
+  .banner {
+    border-radius: var(--radius);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    border: 1px solid transparent;
+  }
+  .banner-error {
+    background: var(--color-danger-soft);
+    color: var(--color-danger-soft-fg);
+    border-color: color-mix(in oklab, var(--color-danger) 30%, transparent);
+  }
+  .banner-success {
+    background: var(--color-success-soft);
+    color: var(--color-success-soft-fg);
+    border-color: color-mix(in oklab, var(--color-success) 30%, transparent);
+  }
+  .banner-info {
+    background: var(--color-info-soft);
+    color: var(--color-info-soft-fg);
+    border-color: color-mix(in oklab, var(--color-info) 30%, transparent);
+  }
+
+  /* ---- Signature: gradient text + accent rule ------------------------- */
+  .text-gradient {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .accent-rule {
+    height: 3px;
+    background: var(--gradient-brand);
+    border-radius: 9999px;
+  }
 }

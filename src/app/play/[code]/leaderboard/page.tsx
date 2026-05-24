@@ -47,10 +47,12 @@ export default async function PlayLeaderboardPage(
   return (
     <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8 space-y-6">
       <header>
-        <Link href="/play" className="text-sm hover:underline">
+        <Link href="/play" className="text-sm text-muted hover:text-text">
           ← Other games
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">{game.name}</h1>
+        <h1 className="text-2xl font-semibold mt-2 tracking-tight">
+          {game.name}
+        </h1>
       </header>
 
       <TabNav
@@ -58,6 +60,7 @@ export default async function PlayLeaderboardPage(
         tabs={[
           { label: "Missions", href: `/play/${code}` },
           { label: "Leaderboard", href: `/play/${code}/leaderboard` },
+          { label: "Notifications", href: `/play/${code}/notifications` },
         ]}
       />
 

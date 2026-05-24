@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { joinTeam, leaveTeam } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
+import GameStartCountdown from "@/components/GameStartCountdown";
 import TabNav from "@/components/TabNav";
 
 export default async function PlayGamePage(
@@ -20,11 +21,32 @@ export default async function PlayGamePage(
 
   const { data: game } = await supabase
     .from("games")
-    .select("id, name, description, join_code, status")
+    .select(
+      "id, name, description, join_code, status, starts_at, location, image_path",
+    )
     .eq("join_code", code)
     .single();
 
   if (!game) notFound();
+
+  let coverUrl: string | null = null;
+  if (game.image_path) {
+    const { data } = await supabase.storage
+      .from("submissions")
+      .createSignedUrl(game.image_path, 60 * 60);
+    coverUrl = data?.signedUrl ?? null;
+  }
+
+  // Auto-start a scheduled game whose time has come; use the effective
+  // status for the banner below.
+  const { data: refreshedStatus } = await supabase.rpc("refresh_game_status", {
+    p_game_id: game.id,
+  });
+  const status = (refreshedStatus as string | null) ?? game.status;
+  // Post-refresh, a still-draft game with a starts_at is necessarily
+  // scheduled for the future (a due start would have auto-activated).
+  const scheduledStart =
+    status === "draft" && game.starts_at ? game.starts_at : null;
 
   // Find the user's team in this game (if any)
   const { data: teams } = await supabase
@@ -135,18 +157,49 @@ export default async function PlayGamePage(
         ← Other games
       </Link>
 
-      <h1 className="text-3xl font-semibold mt-2">{game.name}</h1>
-      {game.description && (
-        <p className="text-black/70 dark:text-white/70 mt-1">
-          {game.description}
-        </p>
+      {coverUrl && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={coverUrl}
+          alt=""
+          className="mt-3 w-full max-h-52 object-cover rounded-xl border border-default"
+        />
       )}
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mt-3">
-          {error}
-        </p>
+      <h1 className="text-3xl font-semibold mt-3 tracking-tight">
+        {game.name}
+      </h1>
+      {game.location && (
+        <p className="text-sm text-muted mt-1">📍 {game.location}</p>
       )}
+      {game.description && (
+        <p className="text-muted mt-1">{game.description}</p>
+      )}
+
+      {error && <p className="banner banner-error mt-3">{error}</p>}
+
+      {status !== "active" &&
+        (scheduledStart ? (
+          <p className="banner banner-info mt-3 flex items-center gap-2">
+            🚀 Game starts in{" "}
+            <GameStartCountdown
+              startsAt={scheduledStart}
+              className="font-semibold"
+            />
+          </p>
+        ) : (
+          <p
+            className={`banner mt-3 ${
+              status === "ended" ? "banner-error" : "banner-info"
+            }`}
+          >
+            {status === "draft"
+              ? "This game hasn't started yet — submissions open once the GM starts it."
+              : status === "paused"
+                ? "⏸ The game is paused — submissions are temporarily closed."
+                : "This game has ended — submissions are closed."}
+          </p>
+        ))}
 
       {!myTeam ? (
         <section className="mt-6">
@@ -154,21 +207,18 @@ export default async function PlayGamePage(
           {teams && teams.length > 0 ? (
             <ul className="space-y-2">
               {teams.map((t) => (
-                <li
-                  key={t.id}
-                  className="rounded border border-black/10 dark:border-white/10 p-3"
-                >
+                <li key={t.id} className="card card-compact">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-3">
                       <span
-                        className="inline-block w-4 h-4 rounded-full"
+                        className="inline-block w-4 h-4 rounded-full ring-1 ring-default"
                         style={{ background: t.color }}
                         aria-hidden
                       />
                       <span className="font-medium">{t.name}</span>
                       {t.requires_password && (
                         <span
-                          className="text-xs text-amber-700 dark:text-amber-300"
+                          className="text-xs text-warn"
                           title="Password required to join"
                         >
                           🔒
@@ -185,12 +235,12 @@ export default async function PlayGamePage(
                           placeholder="Team password"
                           required
                           autoComplete="off"
-                          className="rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1 text-sm w-40"
+                          className="input w-40 py-1 text-sm"
                         />
                       )}
                       <button
                         type="submit"
-                        className="rounded bg-foreground text-background px-3 py-1 text-sm"
+                        className="btn btn-primary btn-sm"
                       >
                         Join
                       </button>
@@ -200,7 +250,7 @@ export default async function PlayGamePage(
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-black/60 dark:text-white/60">
+            <p className="text-sm text-muted">
               No teams have been set up by the GM yet.
             </p>
           )}
@@ -212,6 +262,7 @@ export default async function PlayGamePage(
             tabs={[
               { label: "Missions", href: `/play/${code}` },
               { label: "Leaderboard", href: `/play/${code}/leaderboard` },
+              { label: "Notifications", href: `/play/${code}/notifications` },
             ]}
           />
 
@@ -219,7 +270,7 @@ export default async function PlayGamePage(
             <p className="text-sm">
               You&apos;re on team{" "}
               <span
-                className="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded"
+                className="inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full"
                 style={{
                   background: myTeam.color + "33",
                   color: myTeam.color,
@@ -227,14 +278,15 @@ export default async function PlayGamePage(
               >
                 {myTeam.name}
               </span>{" "}
-              · {totalPoints} pts
+              · <span className="font-mono font-semibold">{totalPoints}</span>{" "}
+              <span className="text-muted">pts</span>
             </p>
             <form action={leaveTeam}>
               <input type="hidden" name="team_id" value={myTeam.id} />
               <input type="hidden" name="join_code" value={code} />
               <button
                 type="submit"
-                className="text-sm text-red-600 hover:underline"
+                className="text-sm text-danger hover:underline"
               >
                 Leave team
               </button>
@@ -243,9 +295,7 @@ export default async function PlayGamePage(
 
           <h2 className="text-lg font-medium mt-6 mb-3">Missions</h2>
           {missionsView.length === 0 ? (
-            <p className="text-sm text-black/60 dark:text-white/60">
-              No missions yet.
-            </p>
+            <p className="text-sm text-muted">No missions yet.</p>
           ) : (
             <ul className="space-y-2">
               {missionsView.map((m) => {
@@ -257,34 +307,16 @@ export default async function PlayGamePage(
 
                 const pill = (() => {
                   if (locked)
-                    return {
-                      label: "🔒 Locked",
-                      cls: "bg-black/10 dark:bg-white/10",
-                    };
+                    return { label: "🔒 Locked", cls: "pill pill-neutral" };
                   if (completed)
-                    return {
-                      label: "✓ Completed",
-                      cls: "bg-green-600/20 text-green-700 dark:text-green-300",
-                    };
+                    return { label: "✓ Completed", cls: "pill pill-success" };
                   if (submitted)
-                    return {
-                      label: "⏳ Submitted",
-                      cls: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
-                    };
+                    return { label: "⏳ Submitted", cls: "pill pill-warn" };
                   if (rejected)
-                    return {
-                      label: "✗ Try again",
-                      cls: "bg-red-600/20 text-red-700 dark:text-red-300",
-                    };
+                    return { label: "✗ Try again", cls: "pill pill-danger" };
                   if (failed)
-                    return {
-                      label: "⌛ Time's up",
-                      cls: "bg-red-700/20 text-red-700 dark:text-red-400",
-                    };
-                  return {
-                    label: "Open",
-                    cls: "bg-blue-600/20 text-blue-700 dark:text-blue-300",
-                  };
+                    return { label: "⌛ Time's up", cls: "pill pill-danger" };
+                  return { label: "Open", cls: "pill pill-info" };
                 })();
 
                 const inner = (
@@ -292,11 +324,11 @@ export default async function PlayGamePage(
                     <div className="flex-1">
                       <p className="font-medium">{m.title}</p>
                       {m.description && (
-                        <p className="text-sm text-black/70 dark:text-white/70 mt-0.5">
+                        <p className="text-sm text-muted mt-0.5">
                           {m.description}
                         </p>
                       )}
-                      <p className="text-xs text-black/50 dark:text-white/50 mt-1 flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-subtle mt-1.5 flex items-center gap-2 flex-wrap">
                         <span>
                           {m.points} pts · {m.submission_type}
                         </span>
@@ -305,19 +337,18 @@ export default async function PlayGamePage(
                         )}
                       </p>
                     </div>
-                    <span
-                      className={`text-xs rounded px-2 py-0.5 self-center whitespace-nowrap ${pill.cls}`}
-                    >
+                    <span className={`${pill.cls} self-center`}>
                       {pill.label}
                     </span>
                   </div>
                 );
 
-                const baseCls =
-                  "block rounded border border-black/10 dark:border-white/10 p-3";
                 if (locked || completed || submitted || failed) {
                   return (
-                    <li key={m.id} className={`${baseCls} opacity-80`}>
+                    <li
+                      key={m.id}
+                      className="card card-compact opacity-70"
+                    >
                       {inner}
                     </li>
                   );
@@ -326,7 +357,7 @@ export default async function PlayGamePage(
                   <li key={m.id}>
                     <Link
                       href={`/play/${code}/m/${m.id}`}
-                      className={`${baseCls} hover:bg-black/5 dark:hover:bg-white/5 transition-colors`}
+                      className="card card-compact card-interactive block"
                     >
                       {inner}
                     </Link>

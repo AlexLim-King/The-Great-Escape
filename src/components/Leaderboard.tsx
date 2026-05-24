@@ -62,47 +62,82 @@ export default function Leaderboard({
 
   return (
     <section>
-      <h2 className="text-xl font-semibold mb-3">Leaderboard</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold tracking-tight">Leaderboard</h2>
+        {rows && rows.length > 0 && (
+          <span className="text-xs text-muted">
+            {rows.length} {rows.length === 1 ? "team" : "teams"} · live
+          </span>
+        )}
+      </div>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mb-2">
-          {error}
-        </p>
-      )}
+      {error && <p className="banner banner-error mb-2">{error}</p>}
 
       {!rows ? (
-        <p className="text-sm text-black/50 dark:text-white/50">Loading…</p>
+        <p className="text-sm text-subtle">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-black/60 dark:text-white/60">
-          No teams yet.
-        </p>
+        <p className="text-sm text-muted">No teams yet.</p>
       ) : (
-        <ol className="space-y-1.5">
+        <ol className="space-y-2">
           {rows.map((r, i) => {
             const isMe = highlightTeamId === r.team_id;
+            const isFirst = i === 0;
+            const isPodium = i < 3;
+            const medal = ["🥇", "🥈", "🥉"][i];
             return (
               <li
                 key={r.team_id}
-                className={`rounded border border-black/10 dark:border-white/10 px-3 py-2 flex items-center gap-3 ${
-                  isMe ? "ring-2 ring-blue-500/50" : ""
+                className={`card card-compact flex items-center gap-3 transition-all ${
+                  isFirst ? "!py-4" : ""
+                } ${
+                  isMe
+                    ? "!border-accent ring-2 ring-accent/30"
+                    : ""
                 }`}
+                style={
+                  isFirst
+                    ? {
+                        boxShadow:
+                          "var(--shadow), 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent)",
+                      }
+                    : undefined
+                }
               >
-                <span className="font-mono text-sm text-black/50 dark:text-white/50 w-5 text-right">
-                  {i + 1}
+                <span
+                  className={`text-center font-mono ${
+                    isPodium ? "text-2xl w-9" : "text-sm text-subtle w-9"
+                  }`}
+                  aria-hidden
+                >
+                  {isPodium ? medal : i + 1}
                 </span>
                 <span
-                  className="inline-block w-3 h-3 rounded-full"
+                  className="inline-block w-3 h-3 rounded-full ring-2 ring-[var(--color-border)]"
                   style={{ background: r.color }}
                   aria-hidden
                 />
-                <span className={`flex-1 ${isMe ? "font-semibold" : ""}`}>
+                <span
+                  className={`flex-1 ${
+                    isFirst ? "text-lg font-semibold" : isMe ? "font-semibold" : ""
+                  }`}
+                >
                   {r.team_name}
+                  {isMe && (
+                    <span className="ml-2 pill pill-accent">you</span>
+                  )}
                 </span>
-                <span className="text-xs text-black/60 dark:text-white/60">
+                <span className="text-xs text-muted hidden sm:inline">
                   {r.completed} done
                 </span>
-                <span className="font-mono text-sm tabular-nums">
-                  {r.score} pts
+                <span
+                  className={`font-mono tabular-nums font-semibold ${
+                    isFirst ? "text-xl" : "text-sm"
+                  }`}
+                >
+                  {r.score}
+                  <span className="text-subtle font-normal ml-0.5 text-xs">
+                    pts
+                  </span>
                 </span>
               </li>
             );

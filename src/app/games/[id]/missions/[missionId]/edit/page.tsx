@@ -93,17 +93,15 @@ export default async function EditMissionPage(
     <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8">
       <Link
         href={`/games/${id}`}
-        className="text-sm text-black/60 dark:text-white/60 hover:underline"
+        className="text-sm text-muted hover:text-text"
       >
         ← {game.name}
       </Link>
-      <h1 className="text-2xl font-semibold mt-2 mb-4">Edit mission</h1>
+      <h1 className="text-2xl font-semibold mt-2 mb-4 tracking-tight">
+        Edit mission
+      </h1>
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mb-4">
-          {error}
-        </p>
-      )}
+      {error && <p className="banner banner-error mb-4">{error}</p>}
 
       <MissionForm
         gameId={game.id}

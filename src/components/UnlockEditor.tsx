@@ -90,7 +90,7 @@ export default function UnlockEditor({
   const submittedGroups = mode === "custom" ? groups : [];
 
   return (
-    <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">
+    <fieldset className="border border-default rounded-lg p-3 space-y-3">
       <legend className="text-sm px-1">Unlock conditions</legend>
 
       <input
@@ -127,7 +127,7 @@ export default function UnlockEditor({
       {mode === "custom" && (
         <>
           {visibleMissions.length === 0 ? (
-            <p className="text-xs text-black/60 dark:text-white/60">
+            <p className="text-xs text-muted">
               Create more missions before adding unlock conditions.
             </p>
           ) : (
@@ -135,10 +135,10 @@ export default function UnlockEditor({
               {groups.map((group, idx) => (
                 <div
                   key={idx}
-                  className="rounded border border-black/10 dark:border-white/10 p-2.5 space-y-1.5 bg-black/[0.02] dark:bg-white/[0.03]"
+                  className="rounded-md border border-default p-2.5 space-y-1.5 bg-surface-muted"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-black/60 dark:text-white/60">
+                    <p className="text-xs text-muted">
                       {idx === 0
                         ? "When all of these are completed:"
                         : "…or all of these:"}
@@ -147,7 +147,7 @@ export default function UnlockEditor({
                       <button
                         type="button"
                         onClick={() => removeGroup(idx)}
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-xs text-danger hover:underline"
                       >
                         Remove
                       </button>
@@ -173,12 +173,12 @@ export default function UnlockEditor({
               <button
                 type="button"
                 onClick={addGroup}
-                className="text-xs rounded border border-black/15 dark:border-white/15 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10"
+                className="btn btn-secondary btn-sm"
               >
                 + Add alternative
               </button>
               {groups.length > 1 && (
-                <p className="text-xs text-black/55 dark:text-white/55">
+                <p className="text-xs text-muted">
                   Mission unlocks when <strong>any</strong> group is fully
                   satisfied.
                 </p>
@@ -188,7 +188,7 @@ export default function UnlockEditor({
         </>
       )}
 
-      <div className="border-t border-black/10 dark:border-white/10 pt-3 space-y-2">
+      <div className="border-t border-default pt-3 space-y-2">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -204,9 +204,9 @@ export default function UnlockEditor({
               value={unlockAfter}
               onChange={(e) => setUnlockAfter(e.target.value)}
               required
-              className="block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+              className="input"
             />
-            <p className="text-xs text-black/55 dark:text-white/55">
+            <p className="text-xs text-muted">
               The mission stays locked until this time even if all unlock
               conditions are already satisfied.
             </p>

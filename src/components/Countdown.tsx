@@ -34,10 +34,10 @@ export default function Countdown({
   const warning = !expired && remainingSec <= 5 * 60; // last 5 minutes
 
   const cls = expired
-    ? "text-red-600 dark:text-red-400"
+    ? "text-danger font-mono tabular-nums"
     : warning
-      ? "text-amber-600 dark:text-amber-400 font-semibold"
-      : "text-black/70 dark:text-white/70";
+      ? "text-warn font-mono tabular-nums font-semibold"
+      : "text-muted font-mono tabular-nums";
 
   return (
     <span className={`${cls} ${className}`}>

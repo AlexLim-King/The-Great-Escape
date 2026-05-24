@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  createTeam,
   deleteTeam,
   deleteMission,
   reorderMissions,
@@ -10,6 +9,7 @@ import {
   setTeamPassword,
 } from "@/lib/gm-actions";
 import TabNav from "@/components/TabNav";
+import AddTeamForm from "@/components/AddTeamForm";
 import SortableMissionList, {
   type SortableMission,
 } from "@/components/SortableMissionList";
@@ -99,43 +99,44 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 space-y-8">
       {/* Header */}
       <header>
-        <Link
-          href="/games"
-          className="text-sm text-black/60 dark:text-white/60 hover:underline"
-        >
+        <Link href="/games" className="text-sm text-muted hover:text-text">
           ← All games
         </Link>
         <div className="mt-2 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-semibold">{game.name}</h1>
+          <div className="space-y-3">
+            <h1 className="text-4xl font-bold tracking-tight">{game.name}</h1>
             {game.description && (
-              <p className="text-black/70 dark:text-white/70 mt-1">
+              <p className="text-muted text-base max-w-xl">
                 {game.description}
               </p>
             )}
-            <p className="text-sm mt-2">
-              Join code:{" "}
-              <span className="font-mono text-lg bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded">
-                {game.join_code}
-              </span>{" "}
-              · status: {game.status}
-            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="inline-flex items-center gap-2 card card-compact !py-1.5 !px-3">
+                <span className="text-xs text-muted uppercase tracking-wider">
+                  Join code
+                </span>
+                <span
+                  data-testid="join-code"
+                  className="font-mono text-lg font-semibold tracking-wider text-gradient"
+                  style={{ background: "var(--gradient-brand)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
+                >
+                  {game.join_code}
+                </span>
+              </div>
+              <span className="pill pill-success">● {game.status}</span>
+            </div>
           </div>
           <form action={deleteGame}>
             <input type="hidden" name="id" value={game.id} />
             <button
               type="submit"
-              className="text-sm text-red-600 hover:underline"
+              className="text-sm text-danger hover:underline"
             >
               Delete game
             </button>
           </form>
         </div>
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mt-3">
-            {error}
-          </p>
-        )}
+        {error && <p className="banner banner-error mt-3">{error}</p>}
       </header>
 
       <TabNav
@@ -149,6 +150,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
             badgeTone: "warn",
           },
           { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
+          { label: "Settings", href: `/games/${game.id}/settings` },
         ]}
       />
 
@@ -159,21 +161,18 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
         {teams && teams.length > 0 ? (
           <ul className="space-y-2 mb-4">
             {teams.map((t) => (
-              <li
-                key={t.id}
-                className="rounded border border-black/10 dark:border-white/10 p-3 space-y-2"
-              >
+              <li key={t.id} className="card card-compact space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span
-                      className="inline-block w-4 h-4 rounded-full"
+                      className="inline-block w-4 h-4 rounded-full ring-1 ring-default"
                       style={{ background: t.color }}
                       aria-hidden
                     />
-                    <span>{t.name}</span>
+                    <span className="font-medium">{t.name}</span>
                     {t.requires_password && (
                       <span
-                        className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded px-1.5 py-0.5"
+                        className="pill pill-warn"
                         title="Password required to join"
                       >
                         🔒 password set
@@ -185,7 +184,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                     <input type="hidden" name="game_id" value={game.id} />
                     <button
                       type="submit"
-                      className="text-sm text-red-600 hover:underline"
+                      className="text-sm text-danger hover:underline"
                     >
                       Remove
                     </button>
@@ -202,12 +201,9 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
                         ? "Change password (blank to clear)"
                         : "Set password (optional)"
                     }
-                    className="flex-1 rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-1.5 text-sm"
+                    className="input flex-1"
                   />
-                  <button
-                    type="submit"
-                    className="text-sm rounded border border-black/15 dark:border-white/15 px-3"
-                  >
+                  <button type="submit" className="btn btn-secondary btn-sm">
                     {t.requires_password ? "Update" : "Set"}
                   </button>
                 </form>
@@ -215,50 +211,30 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-black/60 dark:text-white/60 mb-4">
-            No teams yet.
-          </p>
+          <p className="text-sm text-muted mb-4">No teams yet.</p>
         )}
 
-        <form action={createTeam} className="flex gap-2 flex-wrap">
-          <input type="hidden" name="game_id" value={game.id} />
-          <input
-            name="name"
-            placeholder="Team name"
-            required
-            className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 flex-1 min-w-[10rem]"
-          />
-          <input
-            name="password"
-            type="text"
-            placeholder="Password (optional)"
-            className="rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2 w-44"
-          />
-          <input
-            name="color"
-            type="color"
-            defaultValue="#3b82f6"
-            className="h-10 w-12 rounded border border-black/15 dark:border-white/15"
-          />
-          <button
-            type="submit"
-            className="rounded bg-foreground text-background px-4 py-2 text-sm"
-          >
-            Add team
-          </button>
-        </form>
+        <AddTeamForm gameId={game.id} />
       </section>
 
       {/* Missions */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h2 className="text-xl font-semibold">Missions</h2>
-          <Link
-            href={`/games/${game.id}/missions/new`}
-            className="rounded bg-foreground text-background px-4 py-2 text-sm"
-          >
-            + Add mission
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/games/${game.id}/missions/batch`}
+              className="btn btn-secondary btn-sm"
+            >
+              Batch upload
+            </Link>
+            <Link
+              href={`/games/${game.id}/missions/new`}
+              className="btn btn-primary btn-sm"
+            >
+              + Add mission
+            </Link>
+          </div>
         </div>
 
         <SortableMissionList

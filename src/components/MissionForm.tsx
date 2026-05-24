@@ -107,7 +107,24 @@ export default function MissionForm({
         { value: "gm_judged", label: "GM judged" },
       ];
 
-  const initialTeamIdSet = new Set(initialTeamIds ?? []);
+  // Controlled so we can validate "specific assignment needs ≥1 team"
+  // on the client and disable submit — preventing a server round-trip
+  // that would otherwise redirect and wipe the whole form.
+  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(
+    () => new Set(initialTeamIds ?? []),
+  );
+
+  function toggleTeam(teamId: string, checked: boolean) {
+    setSelectedTeamIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(teamId);
+      else next.delete(teamId);
+      return next;
+    });
+  }
+
+  const specificButNoTeams =
+    assignmentMode === "specific" && selectedTeamIds.size === 0;
 
   return (
     <form action={action} className="space-y-4">
@@ -122,7 +139,7 @@ export default function MissionForm({
           name="title"
           required
           defaultValue={initial?.title ?? ""}
-          className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+          className="mt-1 input"
         />
       </label>
 
@@ -132,13 +149,13 @@ export default function MissionForm({
           name="description"
           rows={3}
           defaultValue={initial?.description ?? ""}
-          className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+          className="mt-1 input"
         />
       </label>
 
       {/* Reference image — slightly different UX in create vs edit */}
       {isEdit ? (
-        <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">
+        <fieldset className="border border-default rounded-lg p-3 space-y-3">
           <legend className="text-sm px-1">Reference image</legend>
 
           {currentReferenceImageUrl ? (
@@ -148,11 +165,9 @@ export default function MissionForm({
                 <img
                   src={currentReferenceImageUrl}
                   alt="Current reference"
-                  className="w-20 h-20 object-cover rounded border border-black/10 dark:border-white/10 flex-none"
+                  className="w-20 h-20 object-cover rounded-md border border-default flex-none"
                 />
-                <p className="text-xs text-black/60 dark:text-white/60">
-                  Current image
-                </p>
+                <p className="text-xs text-muted">Current image</p>
               </div>
 
               <div className="flex flex-wrap gap-3 text-sm">
@@ -211,7 +226,7 @@ export default function MissionForm({
                 accept="image/*"
                 className="block w-full text-sm"
               />
-              <p className="text-xs text-black/50 dark:text-white/50">
+              <p className="text-xs text-subtle">
                 Players see this on the mission detail page — useful as a visual
                 clue or context.
               </p>
@@ -227,7 +242,7 @@ export default function MissionForm({
             accept="image/*"
             className="mt-1 block w-full text-sm"
           />
-          <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
+          <span className="block text-xs text-subtle mt-1">
             Players see this on the mission detail page — useful as a visual
             clue or context.
           </span>
@@ -248,7 +263,7 @@ export default function MissionForm({
               if (v === "photo" || v === "video")
                 setValidationMode("gm_judged");
             }}
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+            className="mt-1 input"
           >
             <option value="text">Text</option>
             <option value="photo">Photo</option>
@@ -263,7 +278,7 @@ export default function MissionForm({
             onChange={(e) =>
               setValidationMode(e.target.value as "auto" | "gm_judged")
             }
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+            className="mt-1 input"
           >
             {validationOptions.map((o) => (
               <option key={o.value} value={o.value}>
@@ -279,9 +294,13 @@ export default function MissionForm({
           <span className="text-sm">Expected answer</span>
           <input
             name="expected_answer"
+            required
             defaultValue={initial?.expected_answer ?? ""}
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+            className="mt-1 input"
           />
+          <span className="block text-xs text-subtle mt-1">
+            Required for auto-checked text missions (case-insensitive match).
+          </span>
         </label>
       )}
 
@@ -292,7 +311,7 @@ export default function MissionForm({
           type="number"
           defaultValue={initial?.points ?? 10}
           min={0}
-          className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+          className="mt-1 input"
         />
       </label>
 
@@ -311,7 +330,7 @@ export default function MissionForm({
       />
 
       {/* Assignment */}
-      <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">
+      <fieldset className="border border-default rounded-lg p-3 space-y-3">
         <legend className="text-sm px-1">Assigned to</legend>
 
         <div className="flex gap-4 text-sm">
@@ -341,33 +360,44 @@ export default function MissionForm({
         {assignmentMode === "specific" && (
           <div className="space-y-1.5">
             {teams.length === 0 ? (
-              <p className="text-xs text-black/60 dark:text-white/60">
+              <p className="text-xs text-muted">
                 Create teams first before using specific-team assignment.
               </p>
             ) : (
-              teams.map((t) => (
-                <label key={t.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="team_ids"
-                    value={t.id}
-                    defaultChecked={initialTeamIdSet.has(t.id)}
-                  />
-                  <span
-                    className="inline-block w-3 h-3 rounded-full"
-                    style={{ background: t.color }}
-                    aria-hidden
-                  />
-                  {t.name}
-                </label>
-              ))
+              <>
+                {teams.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="team_ids"
+                      value={t.id}
+                      checked={selectedTeamIds.has(t.id)}
+                      onChange={(e) => toggleTeam(t.id, e.target.checked)}
+                    />
+                    <span
+                      className="inline-block w-3 h-3 rounded-full"
+                      style={{ background: t.color }}
+                      aria-hidden
+                    />
+                    {t.name}
+                  </label>
+                ))}
+                {specificButNoTeams && (
+                  <p className="text-xs text-danger">
+                    Pick at least one team, or switch to “All teams”.
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
       </fieldset>
 
       {/* Deadline */}
-      <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-3">
+      <fieldset className="border border-default rounded-lg p-3 space-y-3">
         <legend className="text-sm px-1">Deadline (optional)</legend>
 
         <label className="block">
@@ -384,7 +414,7 @@ export default function MissionForm({
                   | "relative_to_game_start",
               )
             }
-            className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+            className="mt-1 input"
           >
             <option value="none">No deadline</option>
             <option value="relative_to_unlock">
@@ -405,7 +435,7 @@ export default function MissionForm({
               name="deadline_at"
               required
               defaultValue={toLocalDatetimeInput(initial?.deadline_at)}
-              className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+              className="mt-1 input"
             />
           </label>
         )}
@@ -424,9 +454,9 @@ export default function MissionForm({
                   ? Math.round(initial.deadline_duration_sec / 60)
                   : 15
               }
-              className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+              className="mt-1 input"
             />
-            <span className="block text-xs text-black/50 dark:text-white/50 mt-1">
+            <span className="block text-xs text-subtle mt-1">
               {deadlineMode === "relative_to_unlock"
                 ? "Each team gets this much time once the mission unlocks for them."
                 : "Counts down from the game's start time (or creation time if no start set)."}
@@ -435,7 +465,7 @@ export default function MissionForm({
         )}
 
         {isEdit && (
-          <p className="text-xs text-black/55 dark:text-white/55">
+          <p className="text-xs text-muted">
             Deadline changes apply to teams that haven&apos;t unlocked this
             mission yet. Teams with an active timer keep the original window
             so they aren&apos;t penalised mid-game.
@@ -445,7 +475,8 @@ export default function MissionForm({
 
       <button
         type="submit"
-        className="rounded bg-foreground text-background px-4 py-2 font-medium"
+        disabled={specificButNoTeams}
+        className="btn btn-primary"
       >
         {submitLabel}
       </button>

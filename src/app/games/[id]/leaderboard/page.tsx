@@ -33,13 +33,12 @@ export default async function GMLeaderboardPage(
   return (
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 space-y-8">
       <header>
-        <Link
-          href="/games"
-          className="text-sm text-black/60 dark:text-white/60 hover:underline"
-        >
+        <Link href="/games" className="text-sm text-muted hover:text-text">
           ← All games
         </Link>
-        <h1 className="text-2xl font-semibold mt-2">{game.name}</h1>
+        <h1 className="text-2xl font-semibold mt-2 tracking-tight">
+          {game.name}
+        </h1>
       </header>
 
       <TabNav
@@ -53,6 +52,7 @@ export default async function GMLeaderboardPage(
             badgeTone: "warn",
           },
           { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
+          { label: "Settings", href: `/games/${game.id}/settings` },
         ]}
       />
 

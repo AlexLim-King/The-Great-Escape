@@ -117,19 +117,13 @@ export default function SortableMissionList({
   }
 
   if (items.length === 0) {
-    return (
-      <p className="text-sm text-black/60 dark:text-white/60">
-        No missions yet.
-      </p>
-    );
+    return <p className="text-sm text-muted">No missions yet.</p>;
   }
 
   return (
     <>
       {pendingError && (
-        <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mb-2">
-          {pendingError}
-        </p>
+        <p className="banner banner-error mb-2">{pendingError}</p>
       )}
       <DndContext
         sensors={sensors}
@@ -188,8 +182,8 @@ function SortableMissionRow({
     <li
       ref={setNodeRef}
       style={style}
-      className={`rounded border border-black/10 dark:border-white/10 p-3 bg-background ${
-        isDragging ? "shadow-lg" : ""
+      className={`card card-compact card-interactive ${
+        isDragging ? "!shadow-lg" : ""
       }`}
     >
       <div className="flex items-start gap-3">
@@ -201,7 +195,7 @@ function SortableMissionRow({
           {...listeners}
           aria-label={`Reorder ${m.title}`}
           title="Drag to reorder"
-          className="cursor-grab active:cursor-grabbing touch-none flex-none mt-0.5 px-1 py-0.5 rounded text-black/40 dark:text-white/40 hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          className="cursor-grab active:cursor-grabbing touch-none flex-none mt-0.5 px-1 py-0.5 rounded text-subtle hover:bg-surface-hover hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
           <svg
             width="14"
@@ -224,16 +218,16 @@ function SortableMissionRow({
           <img
             src={m.reference_url}
             alt=""
-            className="w-16 h-16 object-cover rounded border border-black/10 dark:border-white/10 flex-none"
+            className="w-16 h-16 object-cover rounded-md border border-default flex-none"
           />
         )}
 
         <div className="flex-1 min-w-0">
           <p className="font-medium">{m.title}</p>
-          <p className="text-xs text-black/60 dark:text-white/60 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {m.submission_type} · {m.validation_mode} · {m.points} pts
             {" · "}
-            <span className="text-blue-700 dark:text-blue-300">
+            <span className="text-info">
               {m.assignment_mode === "all"
                 ? "all teams"
                 : `${m.assignment_count} team${m.assignment_count === 1 ? "" : "s"}`}
@@ -250,7 +244,7 @@ function SortableMissionRow({
             {m.unlock_after && (
               <>
                 {" "}·{" "}
-                <span className="text-amber-700 dark:text-amber-300">
+                <span className="text-warn">
                   not before {new Date(m.unlock_after).toLocaleString()}
                 </span>
               </>
@@ -259,7 +253,7 @@ function SortableMissionRow({
               <>
                 {" "}
                 ·{" "}
-                <span className="text-amber-700 dark:text-amber-300">
+                <span className="text-warn">
                   {m.deadline_mode === "absolute"
                     ? `until ${
                         m.deadline_at
@@ -279,7 +273,7 @@ function SortableMissionRow({
         <div className="flex flex-col items-end gap-1 shrink-0">
           <Link
             href={`/games/${gameId}/missions/${m.id}/edit`}
-            className="text-sm hover:underline"
+            className="text-sm text-accent hover:underline"
           >
             Edit
           </Link>
@@ -288,7 +282,7 @@ function SortableMissionRow({
             <input type="hidden" name="game_id" value={gameId} />
             <button
               type="submit"
-              className="text-sm text-red-600 hover:underline"
+              className="text-sm text-danger hover:underline"
             >
               Delete
             </button>

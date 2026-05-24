@@ -40,33 +40,42 @@ export type Database = {
           description: string | null
           ends_at: string | null
           id: string
+          image_path: string | null
           join_code: string
+          location: string | null
           name: string
           owner_id: string
           starts_at: string | null
           status: string
+          theme: string
         }
         Insert: {
           created_at?: string
           description?: string | null
           ends_at?: string | null
           id?: string
+          image_path?: string | null
           join_code: string
+          location?: string | null
           name: string
           owner_id: string
           starts_at?: string | null
           status?: string
+          theme?: string
         }
         Update: {
           created_at?: string
           description?: string | null
           ends_at?: string | null
           id?: string
+          image_path?: string | null
           join_code?: string
+          location?: string | null
           name?: string
           owner_id?: string
           starts_at?: string | null
           status?: string
+          theme?: string
         }
         Relationships: []
       }
@@ -410,6 +419,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      broadcast_announcement: {
+        Args: { p_body?: string; p_game_id: string; p_title: string }
+        Returns: number
+      }
       can_host_games: { Args: never; Returns: boolean }
       expire_overdue_missions_for_game: {
         Args: { p_game_id: string }
@@ -434,11 +447,21 @@ export type Database = {
         Args: { p_password: string; p_team_id: string }
         Returns: string
       }
+      list_game_announcements: {
+        Args: { p_game_id: string; p_limit?: number }
+        Returns: {
+          body: string
+          created_at: string
+          recipient_count: number
+          title: string
+        }[]
+      }
       recompute_team_mission_state: {
         Args: { p_team_id: string }
         Returns: undefined
       }
       refresh_game_state: { Args: { p_game_id: string }; Returns: undefined }
+      refresh_game_status: { Args: { p_game_id: string }; Returns: string }
       reorder_missions: {
         Args: { p_game_id: string; p_ids: string[] }
         Returns: undefined

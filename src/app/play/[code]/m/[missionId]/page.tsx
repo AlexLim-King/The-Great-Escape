@@ -20,10 +20,26 @@ export default async function SubmitMissionPage(
 
   const { data: game } = await supabase
     .from("games")
-    .select("id, name")
+    .select("id, name, status")
     .eq("join_code", code)
     .single();
   if (!game) notFound();
+
+  // Auto-start if a scheduled start is now due, then gate: submissions are
+  // only open while the game is active.
+  const { data: refreshedStatus } = await supabase.rpc("refresh_game_status", {
+    p_game_id: game.id,
+  });
+  const status = (refreshedStatus as string | null) ?? game.status;
+  if (status !== "active") {
+    const reason =
+      status === "paused"
+        ? "The game is paused — submissions are closed."
+        : status === "ended"
+          ? "The game has ended — submissions are closed."
+          : "The game hasn't started yet.";
+    redirect(`/play/${code}?error=${encodeURIComponent(reason)}`);
+  }
 
   const { data: mission } = await supabase
     .from("missions")
@@ -93,16 +109,21 @@ export default async function SubmitMissionPage(
 
   return (
     <main className="flex-1 max-w-xl w-full mx-auto px-4 py-8">
-      <Link href={`/play/${code}`} className="text-sm hover:underline">
+      <Link
+        href={`/play/${code}`}
+        className="text-sm text-muted hover:text-text"
+      >
         ← {game.name}
       </Link>
-      <h1 className="text-2xl font-semibold mt-2">{mission.title}</h1>
+      <h1 className="text-2xl font-semibold mt-2 tracking-tight">
+        {mission.title}
+      </h1>
       {mission.description && (
-        <p className="text-black/70 dark:text-white/70 mt-1 whitespace-pre-wrap">
+        <p className="text-muted mt-1 whitespace-pre-wrap">
           {mission.description}
         </p>
       )}
-      <p className="text-xs text-black/50 dark:text-white/50 mt-1 flex items-center gap-2 flex-wrap">
+      <p className="text-xs text-subtle mt-2 flex items-center gap-2 flex-wrap">
         <span>
           {mission.points} pts ·{" "}
           {mission.validation_mode === "auto" ? "auto-checked" : "GM judged"}
@@ -115,7 +136,7 @@ export default async function SubmitMissionPage(
         <img
           src={referenceUrl}
           alt="Mission reference"
-          className="mt-4 w-full rounded border border-black/10 dark:border-white/10"
+          className="mt-4 w-full rounded-lg border border-default"
         />
       )}
 
@@ -125,9 +146,7 @@ export default async function SubmitMissionPage(
         if (links.length === 0) return null;
         return (
           <div className="mt-4">
-            <p className="text-xs text-black/55 dark:text-white/55 mb-1.5">
-              References
-            </p>
+            <p className="text-xs text-muted mb-1.5">References</p>
             <ul className="flex flex-wrap gap-1.5">
               {links.map((l, i) => (
                 <li key={i}>
@@ -135,7 +154,7 @@ export default async function SubmitMissionPage(
                     href={l.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded border border-black/15 dark:border-white/15 px-2.5 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                    className="inline-flex items-center gap-1 rounded-md border border-strong px-2.5 py-1.5 text-sm hover:bg-surface-hover transition-colors"
                   >
                     <svg
                       width="14"
@@ -160,11 +179,7 @@ export default async function SubmitMissionPage(
         );
       })()}
 
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 rounded p-2 mt-4">
-          {error}
-        </p>
-      )}
+      {error && <p className="banner banner-error mt-4">{error}</p>}
 
       {mission.submission_type === "text" ? (
         <form action={submitTextAnswer} className="mt-6 space-y-3">
@@ -177,13 +192,10 @@ export default async function SubmitMissionPage(
               name="payload_text"
               rows={3}
               required
-              className="mt-1 block w-full rounded border border-black/15 dark:border-white/15 bg-transparent px-3 py-2"
+              className="mt-1 textarea"
             />
           </label>
-          <button
-            type="submit"
-            className="rounded bg-foreground text-background px-4 py-2 font-medium"
-          >
+          <button type="submit" className="btn btn-primary">
             Submit answer
           </button>
         </form>
@@ -201,15 +213,12 @@ export default async function SubmitMissionPage(
           <MediaUploadField kind={isPhoto ? "photo" : "video"} />
 
           {isVideo && (
-            <p className="text-xs text-black/50 dark:text-white/50">
+            <p className="text-xs text-subtle">
               Keep it under ~60 seconds and 100 MB.
             </p>
           )}
 
-          <button
-            type="submit"
-            className="w-full sm:w-auto rounded bg-foreground text-background px-4 py-2.5 font-medium"
-          >
+          <button type="submit" className="btn btn-primary btn-lg w-full sm:w-auto">
             {isPhoto ? "Submit photo" : "Submit video"}
           </button>
         </form>

@@ -1,9 +1,29 @@
 # Project Handoff — Escape Room Mission Platform
 
-**Last updated:** 2026-05-12
-**Status:** Working local prototype, ~16 commits in. Phase 1 + most of Phase 2 from `PRD.md` is done; a few items remain.
+**Last updated:** 2026-05-23
+**Status:** Working local prototype. Phase 1 + most of Phase 2 from `PRD.md` is done, plus a big polish/feature session (see §0). A few items remain (§10).
+
+> ⚠️ **The latest session's work (see §0) is on the working tree but not yet committed.** `git status` will show many modified/new files. Commit when you're happy with it.
 
 This document is for **resuming work in a fresh conversation**. Read this plus [`PRD.md`](./PRD.md) and you have the full picture.
+
+---
+
+## 0. Latest session (2026-05-23) — what changed since the last handoff
+
+A large feature + polish pass. All of this is implemented, typechecked, lint-clean, and covered by an E2E suite (§14):
+
+- **GM announcements → all teams.** New `broadcast_announcement` + `list_game_announcements` RPCs (migration `…010`), an `<AnnouncementComposer>` at the top of the Review page, and a per-player **notifications history page** at `/play/[code]/notifications` (plus a "Notifications" tab on the player surface). New `gm_announcement` notification type.
+- **Mission-centric review.** The Review tab now toggles **By Mission** (a gallery grid of mission cards with representative thumbnail, points, submission count, "to review" badge) ↔ **By Status** (the original pending/approved/rejected queue). Clicking a mission card opens `/games/[id]/review/m/[missionId]` — a per-mission comparison page with the **requirements pinned at the top** and every team's submission below, each with full judging controls. This delivered the PRD "filter submissions by mission" item.
+- **Batch mission upload.** `/games/[id]/missions/batch` — select a set of images; each becomes a GM-judged mission titled from its filename with the picture as reference. Images upload **browser-direct-to-Supabase-Storage** (bypasses the server-action body limit), then `createMissionsBatch` inserts the rows. Additive multi-select with dedupe.
+- **Editorial-Modern theme system.** `globals.css` is now a CSS-variable token system (surfaces/text/borders/accent/status + shadows + gradient) mapped through `@theme inline`, with `@layer components` helpers (`.btn`, `.input`, `.card`, `.pill`, `.banner`, `.text-gradient`). Light + dark via `prefers-color-scheme`. To add a theme later: override the vars under `[data-theme="x"]`. Geist font now actually applies (was overridden by Arial).
+- **Forms preserve input on error.** login/signup/play-join/create-game/create-team converted to the `useActionState` pattern (return `{error, values}` instead of `redirect(?error=)`); MissionForm uses client-side gating. Convention documented in `AGENTS.md`.
+- **Default teams.** New games are seeded with Team 1–4.
+- **Game settings & lifecycle.** New `/games/[id]/settings` tab: edit name/description/end-time (`updateGameSettings`, useActionState) + status control draft → active → paused ⇄ active → ended (`setGameStatus`, migration `…011` adds `paused`). Player submissions are gated on `status === 'active'` (enforced in `ensureMissionSubmittable` + submit page guard + a banner on the play page).
+- **Start scheduling (relative + absolute).** "Start now", or schedule via `<StartScheduler>` — a radio toggle between "in N minutes/hours/days" and "at a set wall-clock time" (`scheduleGameStart` accepts either `amount`+`unit` or an absolute `starts_at`; `cancelGameStart` clears). Scheduled games **auto-start lazily** via `refresh_game_status(game_id)` RPC (migration `…012`) — flips draft→active on the next read once `starts_at` passes (no cron, mirrors the tms refresh pattern). Players see a live `<GameStartCountdown>` that `router.refresh()`es itself to live at zero. **New games now default to `draft`** (was `active`) so they can be started/scheduled — players join while draft but can't submit.
+- **Per-game player themes.** GM picks a theme in settings (`theme` column, migration `…013`); the player surface renders in it. Default = Editorial; **Matrix** = green-on-black CLI/CRT (monospace, phosphor glow, scanlines, digital-rain canvas). Applied FOUC-free via a server-rendered `play/[code]/layout.tsx` wrapper that sets `data-theme` (the global header stays default). New themes = a `[data-theme="x"]` block in `globals.css` + the settings select.
+- **Game intro details.** Settings now has a **cover image** (`games.image_path`, `setGameImage` upload/replace/remove, stored under `game-media/...`) and an optional **location** (`games.location` text), plus **char limits/counters** on name (60) and description (200) — migration `…014`. Cover + location show to players on the `/play/[code]` join/intro screen. (Game-level password + search-visibility were intentionally skipped — team passwords already gate, and there's no public discovery.)
+- **Playwright E2E suite** (`e2e/`, 16 tests) — see §14.
 
 ---
 
@@ -12,8 +32,8 @@ This document is for **resuming work in a fresh conversation**. Read this plus [
 A Goosechase-style scavenger-hunt platform where a **game master (GM)** designs missions with branching unlock graphs and **teams of players** complete them by submitting text / photo / video. Built as a mobile-first web app, cost-optimized for the Malaysian market, intentionally portable (no proprietary lock-in).
 
 Two productive surfaces:
-- **GM** at `/games/[id]` → Setup, Review, Leaderboard tabs
-- **Player** at `/play/[code]` → Missions, Leaderboard tabs
+- **GM** at `/games/[id]` → Setup, Review (By Mission / By Status), Leaderboard tabs. Setup has "Batch upload" + "+ Add mission". Review has the announcement composer.
+- **Player** at `/play/[code]` → Missions, Leaderboard, Notifications tabs
 
 Plus auth surfaces (`/login`, `/signup`) and a guest path (anonymous Supabase auth, no signup needed).
 
@@ -32,7 +52,10 @@ Plus auth surfaces (`/login`, `/signup`) and a guest path (anonymous Supabase au
 | File storage | **Supabase Storage** | Private `submissions` bucket; signed URLs (1h TTL) for all reads |
 | Drag-and-drop | **@dnd-kit/sortable** | For mission reorder |
 | Mission unlock model | **DNF (disjunctive normal form)** in `unlock_groups jsonb` + optional `unlock_after timestamptz` | Stored as `string[][]`; any group satisfies. Time gate independent of groups. |
-| Notifications | **In-app realtime** via DB triggers + `notifications` table + `<NotificationBell>` | Web push not wired yet — see §10 |
+| Notifications | **In-app realtime** via DB triggers + `notifications` table + `<NotificationBell>` | Includes **GM announcements** (broadcast to all teams) + a per-game player history page. Web push still not wired — see §10 |
+| Styling | **Token-based theme** (CSS vars + `@theme inline` + `@layer components`) | "Editorial Modern" default; light/dark via `prefers-color-scheme`. See §5.8 |
+| Testing | **Playwright** E2E (`e2e/`) | `npm run test:e2e`. Runs against the dev server + local Supabase. See §14 |
+| Forms | **`useActionState`** for fallible forms | Return `{error, values}` instead of redirecting, so input survives errors. See `AGENTS.md` |
 
 **Production caveat:** server actions on Vercel free tier cap at ~4.5 MB. Current `bodySizeLimit: "110mb"` works on a server you control (VPS, self-hosted). For Vercel deployment, switch to **direct-to-Supabase-Storage uploads via signed upload URLs** (browser writes straight to storage; server action only records the path).
 
@@ -90,24 +113,34 @@ Escape Room Mission Webbased/         ← parent folder (just contains the repo)
     │   │   │   ├── page.tsx                      # GM: list my games
     │   │   │   ├── new/page.tsx                  # GM: create game
     │   │   │   └── [id]/
-    │   │   │       ├── page.tsx                  # Setup tab
-    │   │   │       ├── review/page.tsx           # Review tab
+    │   │   │       ├── page.tsx                  # Setup tab (AddTeamForm + batch link)
+    │   │   │       ├── review/page.tsx           # Review tab — By Mission / By Status
+    │   │   │       ├── review/m/[missionId]/page.tsx  # per-mission comparison + judging
     │   │   │       ├── leaderboard/page.tsx      # Leaderboard tab
     │   │   │       └── missions/
     │   │   │           ├── new/page.tsx
+    │   │   │           ├── batch/page.tsx        # batch image → missions upload
     │   │   │           └── [missionId]/edit/page.tsx
     │   │   └── play/
-    │   │       ├── page.tsx                      # enter code (or sign in as guest)
+    │   │       ├── page.tsx                      # enter code (renders <JoinGameForm>)
     │   │       └── [code]/
     │   │           ├── page.tsx                  # team picker + Missions tab
     │   │           ├── leaderboard/page.tsx      # Leaderboard tab
+    │   │           ├── notifications/page.tsx    # player notification history
     │   │           └── m/[missionId]/page.tsx    # submit
     │   ├── components/
-    │   │   ├── Header.tsx                        # nav + bell + logout
-    │   │   ├── TabNav.tsx                        # shared Setup/Review/Leaderboard nav
+    │   │   ├── Header.tsx                        # nav + bell + logout + accent stripe
+    │   │   ├── TabNav.tsx                        # shared tab nav
     │   │   ├── NotificationBell.tsx              # live bell + dropdown
+    │   │   ├── PlayerNotificationsList.tsx       # client list for the history page
+    │   │   ├── AnnouncementComposer.tsx          # GM broadcast composer (Review)
     │   │   ├── MissionForm.tsx                   # shared create/edit form
-    │   │   ├── MissionInspector.tsx              # click-to-inspect popup on Review
+    │   │   ├── MissionInspector.tsx              # click-to-inspect popup (By Status)
+    │   │   ├── MissionRequirements.tsx           # pinned requirements panel (per-mission)
+    │   │   ├── SubmissionReviewCard.tsx          # one submission + judging (both review views)
+    │   │   ├── BatchMissionUpload.tsx            # batch image picker + uploader
+    │   │   ├── LoginForm.tsx / SignupForm.tsx / JoinGameForm.tsx  # useActionState forms
+    │   │   ├── NewGameForm.tsx / AddTeamForm.tsx # useActionState forms
     │   │   ├── UnlockEditor.tsx                  # DNF unlock builder + time gate
     │   │   ├── ReferenceLinksEditor.tsx          # add/remove URL rows
     │   │   ├── SortableMissionList.tsx           # drag-and-drop mission list
@@ -115,8 +148,8 @@ Escape Room Mission Webbased/         ← parent folder (just contains the repo)
     │   │   ├── Countdown.tsx                     # live timer for deadlines
     │   │   └── Leaderboard.tsx                   # live aggregate-score table
     │   ├── lib/
-    │   │   ├── auth-actions.ts                   # login / signup / signInAsGuest / logout
-    │   │   ├── gm-actions.ts                     # all GM-side mutations
+    │   │   ├── auth-actions.ts                   # login / signup / joinGame / logout (useActionState)
+    │   │   ├── gm-actions.ts                     # all GM mutations incl. createMissionsBatch, broadcastAnnouncement
     │   │   ├── player-actions.ts                 # joinTeam / submit*
     │   │   ├── notification-actions.ts           # markRead / markAllRead
     │   │   └── supabase/
@@ -125,9 +158,11 @@ Escape Room Mission Webbased/         ← parent folder (just contains the repo)
     │   │       ├── proxy.ts                      # session refresh helper
     │   │       └── database.types.ts             # generated from schema
     │   └── proxy.ts                              # Next 16 middleware (renamed)
+    ├── e2e/                                      # Playwright specs + helpers (see §14)
+    ├── playwright.config.ts
     ├── supabase/
     │   ├── config.toml                           # 64xxx ports + anonymous sign-ins on
-    │   └── migrations/                           # 11 migrations, see §7
+    │   └── migrations/                           # 12 migrations, see §7
     └── .env.local                                # local Supabase keys (gitignored)
 ```
 
@@ -153,7 +188,7 @@ Two SQL functions sweep state:
 Called from page reads on player + GM pages so time gates and deadlines fire on the next visit, **not on a cron**. Adding push notifications properly will require a `pg_cron` job (every 30s) so events fire even when no one's looking.
 
 ### 5.4 Notifications are in-app first, web-push-ready
-DB triggers (`on_tms_change`, `on_submission_notify`) write rows to a `notifications` table. The `<NotificationBell>` subscribes via Supabase Realtime. **Hooking up Web Push later is purely additive** — a worker watches the same realtime channel and calls the web-push service for any subscribed users.
+DB triggers (`on_tms_change`, `on_submission_notify`) write rows to a `notifications` table. The `<NotificationBell>` subscribes via Supabase Realtime. **GM announcements** fan out one `gm_announcement` row per current team member via the SECURITY DEFINER `broadcast_announcement` RPC (so the bell/RLS/realtime path is reused unchanged); `list_game_announcements` dedupes them back into one row per broadcast for the GM's history panel. **Hooking up Web Push later is purely additive** — a worker watches the same realtime channel and calls the web-push service for any subscribed users.
 
 ### 5.5 Guests are real auth users
 Anonymous Supabase auth is enabled in `config.toml`. Guests are real `auth.users` rows with `is_anonymous = true` and no email. All existing RLS policies and FKs work unchanged. Guest hosting is blocked at both the action (`createGame`) and the policy level (`can_host_games()` SECURITY DEFINER fn checks `is_anonymous`).
@@ -162,7 +197,16 @@ Anonymous Supabase auth is enabled in `config.toml`. Guests are real `auth.users
 `reference_image_path` (single image, stored in the `submissions` bucket under `mission-media/...`) and `reference_links` (`jsonb` array of `{label, url}`, capped at 10, http/https only). Both show up on the player submit page and in the GM's `<MissionInspector>` popup.
 
 ### 5.7 Server actions own all writes
-No REST/route handlers for mutations. Every change happens through a server action in `src/lib/*-actions.ts`, which redirects after revalidating. Forms use server actions directly via `action={someAction}`.
+No REST/route handlers for mutations. Every change happens through a server action in `src/lib/*-actions.ts`. Two patterns coexist: simple/always-succeeding actions redirect after revalidating (`action={someAction}`); fallible forms use the `useActionState` pattern below.
+
+### 5.8 Theme tokens (Editorial Modern)
+`globals.css` defines all colors/shadows/radii as CSS variables under `:root` (light) + a `prefers-color-scheme: dark` block, exposed as Tailwind utilities via `@theme inline` (e.g. `bg-surface`, `text-muted`, `border-default`, `text-accent`, `pill-success`). Reusable component classes live in `@layer components` (`.btn{,-primary,-secondary,-ghost,-danger}`, `.input/.textarea/.select`, `.card{,-compact,-interactive}`, `.pill{,-success,...}`, `.banner{,-error,...}`, `.text-gradient`, `.accent-rule`). **Never hardcode colors in components** — use the token utilities or these classes. A new theme = override the vars under `[data-theme="name"]` and set the attribute on a wrapper/element; no component changes. **Live example:** the `matrix` theme (`[data-theme="matrix"]` in `globals.css`) is applied per-game by `play/[code]/layout.tsx` (reads `games.theme`, wraps the player surface in `<div data-theme>` + a `<MatrixRain>` canvas). GM picks it in settings.
+
+### 5.9 Fallible forms preserve input (useActionState)
+Forms that can fail validation/server checks must **not** `redirect("?error=…")` (it wipes uncontrolled inputs). Instead the action is `(prevState, formData) => Promise<{error?, values?}>`; on error it returns the message + the user's input (never secrets), on success it redirects. The form is a client component using `useActionState`, seeding inputs from `state.values` via `defaultValue`. Reference impls: `login`/`signup`/`joinGame` + `LoginForm`/`SignupForm`/`JoinGameForm`; `createGame`/`createTeam` + `NewGameForm`/`AddTeamForm`. Full convention in `AGENTS.md`.
+
+### 5.10 Direct-to-storage upload (batch only, so far)
+`BatchMissionUpload` uploads each image straight from the browser to the `submissions` bucket via the authenticated browser client, then calls `createMissionsBatch(gameId, items[])` with just the resulting paths — sidestepping the server-action body-size limit. This is the pattern the rest of the upload paths (player submissions, single-mission reference) should eventually adopt for Vercel. Storage RLS is permissive (`bucket_id = 'submissions'`), so the same identity works browser- or server-side.
 
 ---
 
@@ -209,6 +253,11 @@ No REST/route handlers for mutations. Every change happens through a server acti
 | `20260506000007_branching_unlock.sql` | Replaces `prerequisite_mission_id` with `unlock_groups jsonb` + `unlock_after timestamptz`. Rewrites recompute fn for DNF + time gates. Adds `refresh_game_state` wrapper. |
 | `20260506000008_notifications.sql` | `notifications` table + RLS + `on_tms_change` + `on_submission_notify` triggers + realtime publication. |
 | `20260506000009_reference_links.sql` | `missions.reference_links jsonb` (array of `{label, url}`). |
+| `20260506000010_gm_announcements.sql` | Adds `gm_announcement` to the notifications type check + `broadcast_announcement(game_id,title,body)` and `list_game_announcements(game_id,limit)` SECURITY DEFINER RPCs (owner-checked). |
+| `20260506000011_game_status_paused.sql` | Adds `'paused'` to the `games.status` check constraint (draft/active/paused/ended) for the lifecycle controls. |
+| `20260506000012_game_auto_start.sql` | `refresh_game_status(game_id) returns text` SECURITY DEFINER — lazily flips a scheduled (draft + due `starts_at`) game to `active` on read; returns the current status. |
+| `20260506000013_game_theme.sql` | `games.theme` column (`'default'`/`'matrix'`) — the per-game player theme. |
+| `20260506000014_game_intro.sql` | `games.image_path` (cover image) + `games.location` (free text) for the player intro screen. |
 
 ---
 
@@ -239,23 +288,24 @@ Auth · games · teams · text+photo missions · linear prerequisites · player 
 | **Game cloning** | ❌ |
 | **PWA polish** (manifest + service worker + install prompt) | ❌ |
 | **i18n** (EN + BM) | ❌ |
-| Accessibility | ⚠️ Partial — keyboard works on key surfaces (DnD has full a11y), no formal audit |
+| Accessibility | ⚠️ Improved (visible focus rings, token contrast, DnD a11y) — still no formal audit |
+| Visual polish / theming | ✅ Token-based theme system, light+dark (§5.8) |
 
 ### Extras beyond PRD
-Mission **edit** page · Mission **drag-and-drop reorder** · Guest joins + guest hosting block · Per-team join **passwords** · Click-to-inspect mission **popup** · Bonus points + tabbed review · Discard rejected submissions · GM **verification** extension point (`can_host_games()` ready) · Mission **reference links**.
+Mission **edit** page · Mission **drag-and-drop reorder** · Guest joins + guest hosting block · Per-team join **passwords** · Click-to-inspect mission **popup** · Bonus points + tabbed review · Discard rejected submissions · GM **verification** extension point (`can_host_games()` ready) · Mission **reference links** · **GM announcements** + player notification history · **Mission-centric review** (By Mission gallery + per-mission comparison) · **Batch mission upload** · **Default Team 1–4** on game create · **Form input preservation** (useActionState) · **Playwright E2E suite**.
 
 ### Still in PRD §5 not yet built
-- Game settings UI for start/end times, status (draft/active/ended pause/resume), team size limits, max teams, invite-only flag
+- Game settings UI: **✅ name/description/schedule + status lifecycle (draft/active/paused/ended) with player-side gating** (`/games/[id]/settings`). Still **❌ team-size limits, max-teams cap, invite-only** (those need new `games` columns + join-time enforcement).
 - Team captain role + shareable team-invite links
 - Team emblem/avatar (only color today)
 - Per-team submission feed for the team to see their own history
 - Per-team progress map view for the GM (locked/unlocked/completed grid)
-- Submission filter by team / mission (only status tabs today)
+- Submission filter: **by mission ✅** (review gallery + per-mission page); **by team ❌**
 
 ### §6 non-functional / production
 - **Cloudflare R2** for media (currently Supabase Storage — fine for dev)
 - **Image processing** (EXIF strip, thumbnails)
-- **Direct-to-storage upload** (required for Vercel deployment)
+- **Direct-to-storage upload** — ✅ for batch mission upload; ❌ still for player submissions + single-mission reference image (those still go through the 110 MB server action)
 - **Video duration enforcement** (60s max — size capped, duration unchecked)
 - Never load-tested at the 1000-concurrent target
 
@@ -284,22 +334,26 @@ d1350dd  Initial commit from Create Next App
 
 Each commit is a self-contained change with a detailed message — `git show <sha>` for context.
 
+> **Note:** the 2026-05-23 session (§0) is **uncommitted** on the working tree as of this writing. Run `git status` / `git diff` to see it before committing.
+
 ---
 
 ## 10. Suggested next steps (pick one)
 
+Currently in progress: **GM / management features** (working through this cluster).
+
 In rough order of impact-per-effort:
 
-1. **Game settings UI** *(small, fixes a real gap)* — start/end times, pause/resume button, team-size limits, max-teams cap. Schema already has the columns.
-2. **GPS check-in submissions** *(completes PRD §5.3 submission types)* — reuse auto-validation pattern; Haversine in SQL is ~10 lines. UI is a "Use my location" button + lat/lng inputs.
-3. **CSV export** of leaderboard + submissions *(small, high practical value)* — server action returns a CSV `Response`.
+1. ~~**Game settings UI** — name/description/schedule + status lifecycle~~ ✅ **done** (2026-05-23). Remaining sub-item: **team-size / max-teams / invite-only** caps (needs new `games` columns + enforcement in `joinTeam`/`createTeam`).
+2. **Per-team progress map** for GM live dashboard *(small, high event-time value)* — grid of teams × missions with locked/unlocked/completed/failed cells.
+3. **CSV export** of leaderboard + submissions *(small, high practical value)* — server action returns a CSV `Response`. The "Download" button from the Goosechase reference belongs on the Review page.
 4. **Game cloning** *(very small)* — duplicate missions on insert; no team assignment carryover.
-5. **Direct-to-storage upload via signed URLs** *(unlocks Vercel deployment)* — server action issues a signed PUT URL; browser uploads; client posts the resulting path to a tiny `recordSubmission` action.
-6. **PWA polish** *(small to start)* — manifest.json + minimal service worker + install prompt. Makes "add to home screen" work on mobile.
-7. **Web push proper** *(builds on the notification foundation)* — VAPID keys + service worker push handler + `push_subscriptions` table + a worker that reads new `notifications` rows. Schema and triggers are already wired.
-8. **`pg_cron` worker** *(needed before push for time-gate / expiry notifications to fire when no one's on the page)* — every 30s call `refresh_game_state` for every active game. Supabase supports `pg_cron`.
-9. **Per-team progress map** for GM live dashboard *(small feature, high event-time value)* — grid of teams × missions with locked/unlocked/completed/failed cells.
-10. **i18n** (BM + EN) *(mechanical, medium effort)*.
+5. **Submission filter by team** *(small)* — by-mission is done; add a team filter to the review surface.
+6. **GPS check-in submissions** *(completes PRD §5.3 submission types)* — reuse auto-validation pattern; Haversine in SQL is ~10 lines. UI is a "Use my location" button + lat/lng inputs.
+7. **Direct-to-storage for player submissions** *(unlocks Vercel deployment)* — apply the §5.10 batch pattern to `submit*` and the single-mission reference upload.
+8. **`pg_cron` worker** *(needed before push for time-gate / expiry notifications to fire when no one's on the page)* — every 30s call `refresh_game_state` for every active game.
+9. **Web push proper** *(builds on the notification foundation)* — VAPID + service worker + `push_subscriptions` table + a worker reading new `notifications` rows.
+10. **PWA polish** + **i18n** (BM + EN).
 
 ---
 
@@ -371,4 +425,37 @@ docker exec supabase_db_escape-room psql -U postgres -c "<SQL>"
 - **`supabase_vector` container restart-loops** harmlessly — it's the analytics sidecar, not used by the app.
 - **Lazy state refresh** means time-gate unlocks and deadline expirations don't fire notifications until *someone visits a page that calls the lazy sweep*. Background cron (item #8 above) fixes this.
 - **No mission delete confirmation** — single click on Delete drops the row. Easy to add a confirm dialog if needed.
+- **Batch upload can orphan storage objects** — if the GM uploads images then closes the tab before `createMissionsBatch` runs, the uploaded files sit in the bucket unreferenced. Harmless; a future cleanup sweep could remove unreferenced `mission-media/*/batch/*` objects.
+- **`MissionForm` per-image points/type** — batch missions all share one points value + submission type; no per-image override yet.
 - **CRLF/LF git warnings** on every commit are noise (Windows line endings). Not a problem; `core.autocrlf=true` would silence them if it bothers you.
+
+---
+
+## 14. End-to-end tests (Playwright)
+
+Specs live in `e2e/`, config in `playwright.config.ts`. They drive a real browser against the dev server (auto-started via the `webServer` block, or reused if already running) + local Supabase. Local Supabase has email confirmations off (`config.toml`), so tests sign up a fresh unique-email user and use it immediately.
+
+```bash
+npm run test:e2e           # headless, all specs
+npm run test:e2e:headed    # watch it drive a browser
+npm run test:e2e:ui        # interactive runner / time-travel
+npm run test:e2e:report    # open the HTML report
+```
+
+| Spec | Covers |
+|---|---|
+| `smoke.spec.ts` | home / login / signup / play pages render |
+| `gm-flow.spec.ts` | signup → create game (asserts Team 1–4) → add mission |
+| `form-preservation.spec.ts` | login keeps email on bad password; mission form required-answer keeps title; specific-teams-with-none disables submit |
+| `announcement-flow.spec.ts` | GM broadcast → joined player sees it in notifications (two browser contexts) |
+| `review-by-mission.spec.ts` | judged mission → player submits → GM reviews via gallery → per-mission page → approve (stays on page) |
+| `batch-upload.spec.ts` | multi-select images (additive) → filename→title derivation → create → land on Setup |
+| `game-lifecycle.spec.ts` | (1) pause → resume gating; (2) schedule "in 2h" → player sees countdown; (3) schedule at an absolute time |
+| `game-theme.spec.ts` | GM sets the Matrix theme → joining player sees `data-theme="matrix"` + rain canvas |
+| `game-intro.spec.ts` | GM sets cover image + location → joining player sees them on the intro screen |
+
+Notes:
+- `workers: 1`, `retries: 1` (absorbs Turbopack cold-compile flakes), failure artifacts (screenshot/video/trace) under `test-results/` (gitignored).
+- A few `data-testid`s exist purely for tests: `join-code` (Setup), `batch-files-input` (batch upload).
+- `e2e/` and `playwright.config.ts` are excluded from `tsconfig.json` so app `tsc` stays clean.
+- Helpers in `e2e/helpers.ts`: `signup`, `createGame`, `createTextMission`, `createJudgedTextMission`, `joinAsGuest`, `pickTeam`, `submitTextMission`, `uniqueEmail`.

@@ -66,6 +66,28 @@ async function ensureMissionSubmittable(
   mission_id: string,
   join_code: string,
 ) {
+  // Submissions are only open while the game is 'active'. First let any
+  // scheduled start that's now due flip the game live, then gate.
+  const { data: teamRow } = await supabase
+    .from("teams")
+    .select("game_id")
+    .eq("id", team_id)
+    .single();
+  if (teamRow) {
+    const { data: status } = await supabase.rpc("refresh_game_status", {
+      p_game_id: teamRow.game_id,
+    });
+    if (status && status !== "active") {
+      const reason =
+        status === "paused"
+          ? "The game is paused — submissions are closed."
+          : status === "ended"
+            ? "The game has ended — submissions are closed."
+            : "The game hasn't started yet.";
+      redirect(`/play/${join_code}?error=${encodeURIComponent(reason)}`);
+    }
+  }
+
   // Sweep any overdue missions and re-evaluate unlocks (so a freshly-
   // opened time gate or newly-satisfied unlock group counts as 'unlocked'
   // by the time the state check below runs).

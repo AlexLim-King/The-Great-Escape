@@ -57,10 +57,8 @@ export default function MediaUploadField({
           htmlFor={inputId}
           className="
             block cursor-pointer rounded-xl border-2 border-dashed
-            border-black/20 dark:border-white/25
-            bg-black/[0.02] dark:bg-white/[0.03]
-            hover:bg-black/[0.05] dark:hover:bg-white/[0.06]
-            hover:border-black/30 dark:hover:border-white/40
+            border-strong bg-surface-muted
+            hover:bg-surface-hover hover:border-accent
             px-4 py-10 text-center transition-colors
           "
         >
@@ -72,49 +70,49 @@ export default function MediaUploadField({
                   ? "Tap to take a photo"
                   : "Tap to record a video"}
               </p>
-              <p className="text-xs text-black/60 dark:text-white/60 mt-1">
+              <p className="text-xs text-muted mt-1">
                 or pick one from your device
               </p>
             </div>
           </div>
         </label>
       ) : (
-        <div className="rounded-xl border border-black/15 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.03] overflow-hidden">
+        <div className="rounded-xl border border-default bg-surface overflow-hidden">
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt="Selected"
-              className="block w-full max-h-72 object-contain bg-black/5 dark:bg-white/5"
+              className="block w-full max-h-72 object-contain bg-surface-muted"
             />
           ) : (
             <div className="flex items-center gap-3 px-4 py-6">
               {kind === "photo" ? <CameraIcon small /> : <VideoIcon small />}
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{file.name}</p>
-                <p className="text-xs text-black/60 dark:text-white/60">
+                <p className="text-xs text-muted">
                   {formatBytes(file.size)}
                 </p>
               </div>
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
-            <p className="text-xs text-black/70 dark:text-white/70 truncate">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-default bg-surface-muted">
+            <p className="text-xs text-muted truncate">
               ✓ {file.name} · {formatBytes(file.size)}
             </p>
             <div className="flex gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="text-xs rounded border border-black/15 dark:border-white/15 px-2 py-1 hover:bg-black/5 dark:hover:bg-white/5"
+                className="btn btn-secondary btn-sm"
               >
                 Change
               </button>
               <button
                 type="button"
                 onClick={clearFile}
-                className="text-xs rounded border border-black/15 dark:border-white/15 px-2 py-1 hover:bg-black/5 dark:hover:bg-white/5"
+                className="btn btn-ghost btn-sm"
               >
                 Remove
               </button>
@@ -144,7 +142,7 @@ function CameraIcon({ small = false }: { small?: boolean }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-black/60 dark:text-white/60"
+      className="text-muted"
       aria-hidden
     >
       <path d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2Z" />
@@ -165,7 +163,7 @@ function VideoIcon({ small = false }: { small?: boolean }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="text-black/60 dark:text-white/60"
+      className="text-muted"
       aria-hidden
     >
       <rect x="2" y="6" width="14" height="12" rx="2" />

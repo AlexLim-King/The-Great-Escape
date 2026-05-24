@@ -15,29 +15,45 @@ async function requireUser() {
 
 // ── Games ────────────────────────────────────────────────────────────────────
 
-export async function createGame(formData: FormData) {
+/**
+ * Form state shape for useActionState-driven forms. On a validation or
+ * server error we return `{ error, values }` (instead of redirecting) so
+ * the client form can show the message and re-seed its inputs — the GM
+ * never loses what they typed. On success the action redirects, which
+ * unmounts the form.
+ */
+export type GameFormState = {
+  error?: string;
+  values?: { name: string; description: string };
+};
+
+export async function createGame(
+  _prev: GameFormState,
+  formData: FormData,
+): Promise<GameFormState> {
   const { supabase, user } = await requireUser();
+
+  const name = (formData.get("name") as string)?.trim() ?? "";
+  const description = ((formData.get("description") as string) ?? "").trim();
+  const values = { name, description };
 
   // Guests (anonymous Supabase auth users) cannot host games. RLS would
   // also reject this, but the server-side check gives us a friendly
   // error path instead of a generic policy violation.
   if (user.is_anonymous) {
-    redirect(
-      "/games/new?error=" +
-        encodeURIComponent(
-          "Hosting requires a full account. Sign up or log in to create a game.",
-        ),
-    );
+    return {
+      error:
+        "Hosting requires a full account. Sign up or log in to create a game.",
+      values,
+    };
   }
 
-  const name = (formData.get("name") as string)?.trim();
-  const description = ((formData.get("description") as string) ?? "").trim();
-  if (!name) redirect("/games/new?error=Name+required");
+  if (!name) return { error: "Name is required.", values };
 
   // Generate a join code via the SQL helper
   const { data: codeRow } = await supabase.rpc("gen_join_code");
   const join_code = (codeRow as unknown as string) ?? null;
-  if (!join_code) redirect("/games/new?error=Could+not+generate+join+code");
+  if (!join_code) return { error: "Could not generate a join code.", values };
 
   const { data, error } = await supabase
     .from("games")
@@ -46,14 +62,30 @@ export async function createGame(formData: FormData) {
       name,
       description: description || null,
       join_code,
-      status: "active",
+      // New games start unstarted so the GM can start now or schedule a
+      // start (see setGameStatus / scheduleGameStart). Players can join
+      // teams while draft, but can't submit until it goes active.
+      status: "draft",
     })
     .select("id")
     .single();
 
   if (error || !data) {
-    redirect(`/games/new?error=${encodeURIComponent(error?.message ?? "Failed")}`);
+    return { error: error?.message ?? "Failed to create game.", values };
   }
+
+  // Seed every new game with four ready-to-use teams so the GM can hand
+  // out join codes immediately. The GM can rename, recolor, or remove
+  // these on the Setup page.
+  const defaultTeams = [
+    { name: "Team 1", color: "#ef4444" },
+    { name: "Team 2", color: "#3b82f6" },
+    { name: "Team 3", color: "#22c55e" },
+    { name: "Team 4", color: "#f59e0b" },
+  ];
+  await supabase
+    .from("teams")
+    .insert(defaultTeams.map((t) => ({ ...t, game_id: data.id })));
 
   revalidatePath("/games");
   redirect(`/games/${data.id}`);
@@ -67,16 +99,233 @@ export async function deleteGame(formData: FormData) {
   redirect("/games");
 }
 
+const GAME_STATUSES = ["draft", "active", "paused", "ended"] as const;
+type GameStatus = (typeof GAME_STATUSES)[number];
+
+/**
+ * Change a game's lifecycle status (draft → active → paused ⇄ active →
+ * ended, with reopen). Simple button action — nothing to preserve, so it
+ * redirects. Revalidates the layout so the player surface picks up the
+ * new status immediately.
+ */
+export async function setGameStatus(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const status = formData.get("status") as string;
+
+  if (!GAME_STATUSES.includes(status as GameStatus)) {
+    redirect(`/games/${game_id}/settings?error=Invalid+status`);
+  }
+
+  await supabase
+    .from("games")
+    .update({ status })
+    .eq("id", game_id)
+    .eq("owner_id", user.id);
+
+  revalidatePath(`/games/${game_id}`, "layout");
+  redirect(`/games/${game_id}/settings`);
+}
+
+/**
+ * Schedule a start and keep the game in 'draft' — it auto-activates on the
+ * next read once the time arrives (via refresh_game_status). Accepts either:
+ *   - a relative duration (`amount` + `unit` of minutes/hours/days), or
+ *   - an absolute wall-clock time (`starts_at`, a datetime-local string)
+ *     for when the GM needs a specific trigger time.
+ * If both are present, the absolute time wins.
+ */
+export async function scheduleGameStart(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const at_raw = ((formData.get("starts_at") as string) ?? "").trim();
+  const amount = parseInt((formData.get("amount") as string) || "0", 10);
+  const unit = (formData.get("unit") as string) || "minutes";
+  const settingsPath = `/games/${game_id}/settings`;
+  const fail = (msg: string) =>
+    redirect(`${settingsPath}?error=${encodeURIComponent(msg)}`);
+
+  let starts_at: string;
+  if (at_raw) {
+    const d = new Date(at_raw);
+    if (Number.isNaN(d.getTime())) fail("That start time isn't valid.");
+    if (d.getTime() <= Date.now()) fail("Pick a start time in the future.");
+    starts_at = d.toISOString();
+  } else {
+    if (!amount || amount <= 0) fail("Enter how long until the start.");
+    const secPerUnit = unit === "hours" ? 3600 : unit === "days" ? 86400 : 60;
+    starts_at = new Date(Date.now() + amount * secPerUnit * 1000).toISOString();
+  }
+
+  await supabase
+    .from("games")
+    .update({ starts_at, status: "draft" })
+    .eq("id", game_id)
+    .eq("owner_id", user.id);
+
+  revalidatePath(`/games/${game_id}`, "layout");
+  redirect(settingsPath);
+}
+
+/** Cancel a scheduled start (clear starts_at; game stays draft). */
+export async function cancelGameStart(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+
+  await supabase
+    .from("games")
+    .update({ starts_at: null })
+    .eq("id", game_id)
+    .eq("owner_id", user.id);
+
+  revalidatePath(`/games/${game_id}`, "layout");
+  redirect(`/games/${game_id}/settings`);
+}
+
+export type GameSettingsState = {
+  error?: string;
+  values?: {
+    name: string;
+    description: string;
+    location: string;
+    ends_at: string;
+    theme: string;
+  };
+};
+
+const GAME_THEMES = ["default", "matrix"] as const;
+const NAME_MAX = 60;
+const DESCRIPTION_MAX = 200;
+const LOCATION_MAX = 120;
+
+/**
+ * Edit game name / description / end time / player theme. useActionState
+ * pattern so a validation error keeps the GM's input (see AGENTS.md). Start
+ * scheduling lives in its own controls (setGameStatus / scheduleGameStart).
+ * The end time is informational for now (no auto-end).
+ */
+export async function updateGameSettings(
+  _prev: GameSettingsState,
+  formData: FormData,
+): Promise<GameSettingsState> {
+  const { supabase, user } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const name = ((formData.get("name") as string) ?? "").trim();
+  const description = ((formData.get("description") as string) ?? "").trim();
+  const location = ((formData.get("location") as string) ?? "").trim();
+  const ends_raw = ((formData.get("ends_at") as string) ?? "").trim();
+  const themeRaw = ((formData.get("theme") as string) ?? "default").trim();
+  const theme = GAME_THEMES.includes(themeRaw as (typeof GAME_THEMES)[number])
+    ? themeRaw
+    : "default";
+  const values = { name, description, location, ends_at: ends_raw, theme };
+
+  if (!name) return { error: "Name is required.", values };
+  if (name.length > NAME_MAX)
+    return { error: `Name must be ${NAME_MAX} characters or fewer.`, values };
+  if (description.length > DESCRIPTION_MAX)
+    return {
+      error: `Description must be ${DESCRIPTION_MAX} characters or fewer.`,
+      values,
+    };
+  if (location.length > LOCATION_MAX)
+    return {
+      error: `Location must be ${LOCATION_MAX} characters or fewer.`,
+      values,
+    };
+
+  const ends_at = ends_raw ? new Date(ends_raw).toISOString() : null;
+
+  const { error } = await supabase
+    .from("games")
+    .update({
+      name,
+      description: description || null,
+      location: location || null,
+      ends_at,
+      theme,
+    })
+    .eq("id", game_id)
+    .eq("owner_id", user.id);
+  if (error) return { error: error.message, values };
+
+  revalidatePath(`/games/${game_id}`, "layout");
+  redirect(`/games/${game_id}/settings`);
+}
+
+/**
+ * Upload, replace, or remove the game's cover image (shown to players on
+ * the join/intro screen). Plain server action (handles a file), separate
+ * from the useActionState settings form. Stored in the `submissions`
+ * bucket under game-media/...; old files are cleaned up on replace/remove.
+ */
+export async function setGameImage(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const remove = formData.get("remove") === "1";
+  const file = formData.get("image") as File | null;
+  const settingsPath = `/games/${game_id}/settings`;
+  const fail = (msg: string) =>
+    redirect(`${settingsPath}?error=${encodeURIComponent(msg)}`);
+
+  const { data: game } = await supabase
+    .from("games")
+    .select("owner_id, image_path")
+    .eq("id", game_id)
+    .single();
+  if (!game || game.owner_id !== user.id) fail("Game not found or not yours.");
+  const existingPath = game!.image_path;
+
+  if (remove) {
+    if (existingPath) {
+      await supabase.storage.from("submissions").remove([existingPath]);
+    }
+    await supabase.from("games").update({ image_path: null }).eq("id", game_id);
+    revalidatePath(settingsPath, "layout");
+    redirect(settingsPath);
+  }
+
+  if (!file || file.size === 0) fail("Pick an image to upload.");
+  if (file!.size > 10 * 1024 * 1024) fail("Image must be 10 MB or smaller.");
+
+  const ext =
+    (file!.name.split(".").pop() || "jpg")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 5) || "jpg";
+  const path = `game-media/${game_id}/cover-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("submissions")
+    .upload(path, file!, { contentType: file!.type || "image/jpeg" });
+  if (upErr) fail("Upload failed: " + upErr.message);
+
+  if (existingPath) {
+    await supabase.storage.from("submissions").remove([existingPath]);
+  }
+  await supabase.from("games").update({ image_path: path }).eq("id", game_id);
+  revalidatePath(settingsPath, "layout");
+  redirect(settingsPath);
+}
+
 // ── Teams ────────────────────────────────────────────────────────────────────
 
-export async function createTeam(formData: FormData) {
+export type TeamFormState = {
+  error?: string;
+  values?: { name: string; color: string };
+};
+
+export async function createTeam(
+  _prev: TeamFormState,
+  formData: FormData,
+): Promise<TeamFormState> {
   const { supabase } = await requireUser();
   const game_id = formData.get("game_id") as string;
-  const name = (formData.get("name") as string)?.trim();
+  const name = (formData.get("name") as string)?.trim() ?? "";
   const color = (formData.get("color") as string) || "#3b82f6";
   const password = ((formData.get("password") as string) ?? "").trim();
+  const values = { name, color };
 
-  if (!name) redirect(`/games/${game_id}?error=Team+name+required`);
+  if (!name) return { error: "Team name is required.", values };
 
   const { data: inserted, error } = await supabase
     .from("teams")
@@ -85,9 +334,7 @@ export async function createTeam(formData: FormData) {
     .single();
 
   if (error || !inserted) {
-    redirect(
-      `/games/${game_id}?error=${encodeURIComponent(error?.message ?? "Insert failed")}`,
-    );
+    return { error: error?.message ?? "Could not create the team.", values };
   }
 
   if (password) {
@@ -96,9 +343,9 @@ export async function createTeam(formData: FormData) {
       p_password: password,
     });
     if (pwErr) {
-      redirect(
-        `/games/${game_id}?error=${encodeURIComponent("Team created but password failed: " + pwErr.message)}`,
-      );
+      // Team exists now; surface the password problem but don't keep the
+      // (already-used) name in the form.
+      return { error: "Team created, but setting the password failed: " + pwErr.message };
     }
   }
 
@@ -452,6 +699,87 @@ export async function createMission(formData: FormData) {
   redirect(`/games/${game_id}`);
 }
 
+/**
+ * Batch-create template missions from a folder of images. The browser
+ * uploads each image straight to storage (avoiding the server-action body
+ * limit) and passes us the resulting paths + a title derived from each
+ * file name. We insert the mission rows here.
+ *
+ * Defaults: GM-judged (there's no answer key to auto-check against),
+ * always-available unlock, assigned to all teams. The GM tweaks anything
+ * else afterwards via the normal edit page.
+ *
+ * Takes plain args (not FormData) so it can be called directly from the
+ * batch-upload client component, same pattern as reorderMissions.
+ */
+export async function createMissionsBatch(
+  gameId: string,
+  items: Array<{
+    title: string;
+    reference_image_path: string;
+    points: number;
+    submission_type: "text" | "photo" | "video";
+  }>,
+): Promise<{ created: number; error?: string }> {
+  const { supabase, user } = await requireUser();
+
+  if (!items || items.length === 0) {
+    return { created: 0, error: "No missions to create." };
+  }
+  if (items.length > 100) {
+    return { created: 0, error: "Too many at once — max 100 per batch." };
+  }
+
+  // Friendly ownership check (RLS also enforces missions_insert_gm).
+  const { data: game } = await supabase
+    .from("games")
+    .select("id, owner_id")
+    .eq("id", gameId)
+    .single();
+  if (!game || game.owner_id !== user.id) {
+    return { created: 0, error: "Game not found or not yours." };
+  }
+
+  // Append after any existing missions so display order stays stable.
+  const { data: lastOrderRow } = await supabase
+    .from("missions")
+    .select("display_order")
+    .eq("game_id", gameId)
+    .order("display_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let order = (lastOrderRow?.display_order ?? -1) + 1;
+
+  const allowedTypes = new Set(["text", "photo", "video"]);
+  const rows = items.map((it) => ({
+    game_id: gameId,
+    title: it.title.trim() || "Untitled mission",
+    description: null,
+    points: Math.max(0, Math.floor(it.points) || 0),
+    submission_type: allowedTypes.has(it.submission_type)
+      ? it.submission_type
+      : "photo",
+    // No answer key in a batch, so everything is GM-judged.
+    validation_mode: "gm_judged" as const,
+    expected_answer: null,
+    unlock_groups: [],
+    unlock_after: null,
+    reference_links: [],
+    reference_image_path: it.reference_image_path,
+    deadline_mode: null,
+    deadline_at: null,
+    deadline_duration_sec: null,
+    assignment_mode: "all" as const,
+    display_order: order++,
+  }));
+
+  const { error } = await supabase.from("missions").insert(rows);
+  if (error) return { created: 0, error: error.message };
+
+  revalidatePath(`/games/${gameId}`);
+  return { created: rows.length };
+}
+
 export async function updateMission(formData: FormData) {
   const { supabase } = await requireUser();
   const game_id = formData.get("game_id") as string;
@@ -734,13 +1062,29 @@ export async function reorderMissions(
 
 // ── Judging ──────────────────────────────────────────────────────────────────
 
+/**
+ * Decide where a judging action returns to. The review surfaces pass a
+ * `redirect_to` path (the per-mission page, or a status-view URL); we
+ * accept it only if it's a same-origin path. Falls back to the legacy
+ * `tab` field, then to the bare review page.
+ */
+function judgeReturnPath(formData: FormData, gameId: string): string {
+  const redirectTo = ((formData.get("redirect_to") as string) ?? "").trim();
+  if (redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
+    return redirectTo;
+  }
+  const tab = ((formData.get("tab") as string) ?? "").trim();
+  return tab
+    ? `/games/${gameId}/review?view=status&tab=${tab}`
+    : `/games/${gameId}/review`;
+}
+
 export async function judgeSubmission(formData: FormData) {
   const { supabase, user } = await requireUser();
   const id = formData.get("id") as string;
   const game_id = formData.get("game_id") as string;
   const decision = formData.get("decision") as "approved" | "rejected";
   const feedback = ((formData.get("feedback") as string) ?? "").trim() || null;
-  const tab = ((formData.get("tab") as string) ?? "").trim();
 
   // Bonus only meaningful on approve; clamp to >= 0
   const bonusRaw = (formData.get("bonus_points") as string) ?? "0";
@@ -757,12 +1101,9 @@ export async function judgeSubmission(formData: FormData) {
     })
     .eq("id", id);
 
-  revalidatePath(`/games/${game_id}/review`);
-  redirect(
-    tab
-      ? `/games/${game_id}/review?tab=${tab}`
-      : `/games/${game_id}/review`,
-  );
+  const dest = judgeReturnPath(formData, game_id);
+  revalidatePath(`/games/${game_id}/review`, "layout");
+  redirect(dest);
 }
 
 /**
@@ -775,7 +1116,6 @@ export async function discardSubmission(formData: FormData) {
   const { supabase } = await requireUser();
   const id = formData.get("id") as string;
   const game_id = formData.get("game_id") as string;
-  const tab = ((formData.get("tab") as string) ?? "rejected").trim();
 
   await supabase
     .from("submissions")
@@ -783,8 +1123,58 @@ export async function discardSubmission(formData: FormData) {
     .eq("id", id)
     .eq("status", "rejected");
 
-  revalidatePath(`/games/${game_id}/review`);
-  redirect(`/games/${game_id}/review?tab=${tab}`);
+  const dest = judgeReturnPath(formData, game_id);
+  revalidatePath(`/games/${game_id}/review`, "layout");
+  redirect(dest);
+}
+
+// ── Announcements ────────────────────────────────────────────────────────────
+
+/**
+ * Broadcast an announcement to every player in the game. Fans out into
+ * one notification row per team member via the broadcast_announcement
+ * RPC, which authorizes against games.owner_id. The redirect carries a
+ * recipient count in the query string so the Review page can show a
+ * lightweight confirmation.
+ */
+export async function broadcastAnnouncement(formData: FormData) {
+  const { supabase } = await requireUser();
+  const game_id = formData.get("game_id") as string;
+  const title = ((formData.get("title") as string) ?? "").trim();
+  const body = ((formData.get("body") as string) ?? "").trim() || undefined;
+  const tab = ((formData.get("tab") as string) ?? "").trim();
+
+  const reviewPath = `/games/${game_id}/review`;
+  const back = (params: string) =>
+    tab ? `${reviewPath}?tab=${tab}&${params}` : `${reviewPath}?${params}`;
+
+  if (!title) {
+    redirect(back("announce_error=" + encodeURIComponent("Title is required.")));
+  }
+  if (title.length > 120) {
+    redirect(
+      back("announce_error=" + encodeURIComponent("Title is too long (max 120 chars).")),
+    );
+  }
+  if (body && body.length > 2000) {
+    redirect(
+      back("announce_error=" + encodeURIComponent("Message is too long (max 2000 chars).")),
+    );
+  }
+
+  const { data, error } = await supabase.rpc("broadcast_announcement", {
+    p_game_id: game_id,
+    p_title: title,
+    p_body: body,
+  });
+
+  if (error) {
+    redirect(back("announce_error=" + encodeURIComponent(error.message)));
+  }
+
+  const sent = (data as unknown as number) ?? 0;
+  revalidatePath(reviewPath);
+  redirect(back("announce_sent=" + String(sent)));
 }
 
 /**
@@ -796,7 +1186,6 @@ export async function updateSubmissionBonus(formData: FormData) {
   const { supabase } = await requireUser();
   const id = formData.get("id") as string;
   const game_id = formData.get("game_id") as string;
-  const tab = ((formData.get("tab") as string) ?? "approved").trim();
 
   const bonus = Math.max(
     0,
@@ -809,6 +1198,7 @@ export async function updateSubmissionBonus(formData: FormData) {
     .eq("id", id)
     .eq("status", "approved");
 
-  revalidatePath(`/games/${game_id}/review`);
-  redirect(`/games/${game_id}/review?tab=${tab}`);
+  const dest = judgeReturnPath(formData, game_id);
+  revalidatePath(`/games/${game_id}/review`, "layout");
+  redirect(dest);
 }

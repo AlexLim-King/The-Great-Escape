@@ -21,18 +21,15 @@ export default async function GamesPage() {
     <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">My games</h1>
-        <Link
-          href="/games/new"
-          className="rounded bg-foreground text-background px-4 py-2 text-sm"
-        >
+        <Link href="/games/new" className="btn btn-primary btn-sm">
           + New game
         </Link>
       </div>
 
       {!games || games.length === 0 ? (
-        <p className="text-black/60 dark:text-white/60">
+        <p className="text-muted">
           You haven&apos;t hosted any games yet.{" "}
-          <Link href="/games/new" className="underline">
+          <Link href="/games/new" className="text-accent hover:underline">
             Create your first one
           </Link>
           .
@@ -42,21 +39,24 @@ export default async function GamesPage() {
           {games.map((g) => (
             <li
               key={g.id}
-              className="rounded border border-black/10 dark:border-white/10 p-4 flex items-center justify-between"
+              className="card flex items-center justify-between hover:shadow-sm transition-shadow"
             >
               <div>
-                <Link href={`/games/${g.id}`} className="font-medium">
+                <Link
+                  href={`/games/${g.id}`}
+                  className="font-medium hover:text-accent"
+                >
                   {g.name}
                 </Link>
-                <p className="text-sm text-black/60 dark:text-white/60">
+                <p className="text-sm text-muted">
                   Join code:{" "}
-                  <span className="font-mono">{g.join_code}</span>{" "}
-                  · {g.status}
+                  <span className="font-mono">{g.join_code}</span> ·{" "}
+                  <span className="pill pill-neutral">{g.status}</span>
                 </p>
               </div>
               <Link
                 href={`/games/${g.id}`}
-                className="text-sm underline"
+                className="text-sm text-accent hover:underline"
               >
                 Manage →
               </Link>

@@ -33,13 +33,13 @@ export default function ReferenceLinksEditor({
   }
 
   return (
-    <fieldset className="border border-black/10 dark:border-white/10 rounded p-3 space-y-2">
+    <fieldset className="border border-default rounded-lg p-3 space-y-2">
       <legend className="text-sm px-1">Reference links (optional)</legend>
 
       <input type="hidden" name={name} value={JSON.stringify(links)} />
 
       {links.length === 0 ? (
-        <p className="text-xs text-black/55 dark:text-white/55">
+        <p className="text-xs text-muted">
           Attach external URLs (a map, a clip, supporting docs) that players
           should see on the mission detail page.
         </p>
@@ -51,19 +51,19 @@ export default function ReferenceLinksEditor({
                 placeholder="Label (e.g. Map)"
                 value={l.label}
                 onChange={(e) => update(idx, { label: e.target.value })}
-                className="w-32 rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm"
+                className="input w-32"
               />
               <input
                 type="url"
                 placeholder="https://…"
                 value={l.url}
                 onChange={(e) => update(idx, { url: e.target.value })}
-                className="flex-1 min-w-[12rem] rounded border border-black/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm"
+                className="input flex-1 min-w-[12rem]"
               />
               <button
                 type="button"
                 onClick={() => remove(idx)}
-                className="text-xs text-red-600 hover:underline px-1 py-1.5"
+                className="text-xs text-danger hover:underline px-1 py-1.5"
               >
                 Remove
               </button>
@@ -72,11 +72,7 @@ export default function ReferenceLinksEditor({
         </ul>
       )}
 
-      <button
-        type="button"
-        onClick={add}
-        className="text-xs rounded border border-black/15 dark:border-white/15 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10"
-      >
+      <button type="button" onClick={add} className="btn btn-secondary btn-sm">
         + Add link
       </button>
     </fieldset>

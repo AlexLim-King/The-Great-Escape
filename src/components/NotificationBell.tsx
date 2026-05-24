@@ -17,7 +17,8 @@ type Notification = {
     | "submission_rejected"
     | "mission_unlocked"
     | "mission_expired"
-    | "new_submission";
+    | "new_submission"
+    | "gm_announcement";
   title: string;
   body: string | null;
   href: string | null;
@@ -45,6 +46,7 @@ const iconForType: Record<Notification["type"], string> = {
   mission_unlocked: "🔓",
   mission_expired: "⌛",
   new_submission: "📨",
+  gm_announcement: "📢",
 };
 
 export default function NotificationBell({ userId }: { userId: string }) {
@@ -148,7 +150,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ""}`}
-        className="relative inline-flex items-center justify-center w-8 h-8 rounded hover:bg-black/5 dark:hover:bg-white/10"
+        className="relative inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-surface-hover transition-colors"
       >
         <svg
           width="18"
@@ -166,7 +168,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
         </svg>
         {unreadCount > 0 && (
           <span
-            className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 text-center font-medium"
+            className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-accent text-accent-fg text-[10px] leading-4 text-center font-semibold"
             aria-hidden
           >
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -178,18 +180,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div
           className="
             absolute right-0 top-full mt-1 w-80 max-h-96 overflow-y-auto
-            rounded-lg border border-black/10 dark:border-white/15
-            bg-background shadow-xl z-50
+            rounded-lg border border-default
+            bg-surface shadow-xl z-50
           "
           role="menu"
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-black/10 dark:border-white/10 sticky top-0 bg-background">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-default sticky top-0 bg-surface">
             <p className="text-sm font-medium">Notifications</p>
             {unreadCount > 0 && (
               <button
                 type="button"
                 onClick={handleMarkAll}
-                className="text-xs text-black/60 dark:text-white/60 hover:underline"
+                className="text-xs text-muted hover:text-text hover:underline"
               >
                 Mark all read
               </button>
@@ -197,7 +199,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
           </div>
 
           {items.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-center text-black/55 dark:text-white/55">
+            <p className="px-3 py-6 text-sm text-center text-muted">
               No notifications yet.
             </p>
           ) : (
@@ -206,7 +208,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                 const unread = !n.read_at;
                 const row = (
                   <div
-                    className={`flex items-start gap-2.5 px-3 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 text-left w-full ${
+                    className={`flex items-start gap-2.5 px-3 py-2.5 hover:bg-surface-hover text-left w-full ${
                       unread ? "" : "opacity-70"
                     }`}
                   >
@@ -223,17 +225,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
                         {n.title}
                       </p>
                       {n.body && (
-                        <p className="text-xs text-black/60 dark:text-white/60 truncate">
+                        <p className="text-xs text-muted truncate">
                           {n.body}
                         </p>
                       )}
-                      <p className="text-xs text-black/45 dark:text-white/45 mt-0.5">
+                      <p className="text-xs text-subtle mt-0.5">
                         {timeAgo(n.created_at)}
                       </p>
                     </div>
                     {unread && (
                       <span
-                        className="w-2 h-2 rounded-full bg-blue-500 flex-none mt-1.5"
+                        className="w-2 h-2 rounded-full bg-accent flex-none mt-1.5"
                         aria-hidden
                       />
                     )}
@@ -242,7 +244,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                 return (
                   <li
                     key={n.id}
-                    className="border-b border-black/5 dark:border-white/5 last:border-0"
+                    className="border-b border-default last:border-0"
                   >
                     <button
                       type="button"
