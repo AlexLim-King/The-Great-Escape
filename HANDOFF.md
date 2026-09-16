@@ -1,15 +1,32 @@
 # Project Handoff — Escape Room Mission Platform
 
-**Last updated:** 2026-05-23
-**Status:** Working local prototype. Phase 1 + most of Phase 2 from `PRD.md` is done, plus a big polish/feature session (see §0). A few items remain (§10).
+**Last updated:** 2026-05-24
+**Status:** Working local prototype. Phase 1 + most of Phase 2 from `PRD.md` is done, plus a GM/management cluster (see §0). A few items remain (§10).
 
-> ⚠️ **The latest session's work (see §0) is on the working tree but not yet committed.** `git status` will show many modified/new files. Commit when you're happy with it.
+> ⚠️ **The 2026-05-24 GM/management work (see §0) is on the working tree but not yet committed.** The prior session is committed (`7c31b43`). `git status` will show the new/modified files below. Commit when you're happy with it.
 
 This document is for **resuming work in a fresh conversation**. Read this plus [`PRD.md`](./PRD.md) and you have the full picture.
 
 ---
 
-## 0. Latest session (2026-05-23) — what changed since the last handoff
+## 0. Latest session (2026-05-24) — GM / management cluster
+
+Three GM dashboard features, all typechecked, lint-clean, and covered by a new E2E spec (`gm-management.spec.ts`, §14):
+
+- **Per-team progress map.** New `/games/[id]/progress` tab — a missions × teams grid. Each cell shows that team's `team_mission_state` (locked / unlocked / pending-review / completed / expired) as a color-tinted pill, plus a synthetic "not assigned" for specific-assignment missions a team isn't on. Sticky mission column + team header (with a per-team completed/assigned tally); mission rows link to the per-mission review page. Reads `team_mission_state` directly — RLS already lets the owning GM read every team's rows (the `tms_select` policy's owner branch). Server component, no new SQL.
+- **CSV + media export.** New GET route handler `/games/[id]/export?type=submissions|leaderboard|media` (owner-checked). The two CSVs return a `text/csv` download (BOM + CRLF for Excel): `submissions` = one row per submission (mission, team, status, type, points, bonus, submitter, timestamps, answer/text, media path, feedback); `leaderboard` = the `game_leaderboard` RPC flattened to rank/team/score/completed. **`type=media`** returns a **streamed ZIP** of every photo/video submission, organized into one folder per team with files named `<Team> - <Mission>.ext` (collisions get ` (2)`, ` (3)`…). Built with **`archiver`** in `store` mode (media is already compressed) piped through a `PassThrough` → web `ReadableStream`, and files are downloaded from Storage + appended one at a time, so a big video set never has to fit in memory at once. Download links: "↓ Export CSV" + "↓ Download media (N)" on the Review header (the media link is gated on `mediaCount > 0`), "↓ Export leaderboard CSV" on the Leaderboard tab. **This is the only route handler in the app** — chosen over a server action because file downloads need a `Response` (see §5.7 note). Covered by `media-export.spec.ts`.
+- **Filter submissions by team.** The Review **By Status** queue now has a team-pill filter row (`?team=<id>`). Combines with the status tab; sub-tab counts (`statusCounts`) re-scope to the selected team, while the TabNav/toggle badge stays global. The filter is threaded into the judging return path so approving/rejecting keeps you on the filtered view.
+- **Shared `gmTabs()` helper.** `src/lib/gm-tabs.ts` centralizes the GM tab set (Setup / Review / Leaderboard / **Progress** / Settings) that was duplicated across 5 pages — adding the Progress tab was then a one-line change everywhere.
+
+Plus follow-ups in the same session:
+
+- **"Treasure Hunt" player theme** (pirate / beach) — a third per-game theme alongside `default` and `matrix`. Warm parchment/sand surfaces, lagoon-teal + doubloon-gold accents, sepia ink, an old-map **serif** face, a sun-glow vignette, and **drifting ocean waves** along the bottom (`<TreasureBackdrop>` — pure CSS, two data-URI SVG wave bands, no canvas/JS, respects `prefers-reduced-motion`). Wiring is the same five-touch recipe as Matrix: `[data-theme="treasure"]` block in `globals.css`, settings `<option>`, `'treasure'` in `GAME_THEMES` (server validation) + the `games.theme` check constraint (migration `…015`), and `play/[code]/layout.tsx` mounts the backdrop. Covered by `game-theme.spec.ts`.
+- **Cover-image guidance.** Settings now recommends an optimal mobile cover size (landscape **16:9, ~1200×675 px**) in the hint, and the preview thumbnail uses a 16:9 (`aspect-video`) frame to match.
+- **Light / Dark / System mode toggle.** Dark mode used to follow the OS automatically (`@media (prefers-color-scheme: dark)`), so there was no way to force light on a dark-set laptop. It's now **opt-in via `data-color-scheme` on `<html>`**: `globals.css` keeps light in `:root` and applies dark only under `:root[data-color-scheme="dark"]` (no media query). A **`<ThemeToggle>`** in the header cycles Light → Dark → System (persisted in `localStorage['theme-pref']`), and a tiny **pre-paint inline script** in `layout.tsx` resolves the saved choice (default **light**, "system" resolved against the OS) before first paint so there's no flash; `<html>` carries `suppressHydrationWarning`. Default is now light even when the OS prefers dark — the requested behavior for presentations. **Per-game player themes (matrix/treasure) are unaffected** — their `[data-theme]` wrappers override the tokens regardless of light/dark. Covered by `theme-toggle.spec.ts`.
+
+---
+
+## 0b. Prior session (2026-05-23) — earlier feature/polish pass
 
 A large feature + polish pass. All of this is implemented, typechecked, lint-clean, and covered by an E2E suite (§14):
 
@@ -23,7 +40,7 @@ A large feature + polish pass. All of this is implemented, typechecked, lint-cle
 - **Start scheduling (relative + absolute).** "Start now", or schedule via `<StartScheduler>` — a radio toggle between "in N minutes/hours/days" and "at a set wall-clock time" (`scheduleGameStart` accepts either `amount`+`unit` or an absolute `starts_at`; `cancelGameStart` clears). Scheduled games **auto-start lazily** via `refresh_game_status(game_id)` RPC (migration `…012`) — flips draft→active on the next read once `starts_at` passes (no cron, mirrors the tms refresh pattern). Players see a live `<GameStartCountdown>` that `router.refresh()`es itself to live at zero. **New games now default to `draft`** (was `active`) so they can be started/scheduled — players join while draft but can't submit.
 - **Per-game player themes.** GM picks a theme in settings (`theme` column, migration `…013`); the player surface renders in it. Default = Editorial; **Matrix** = green-on-black CLI/CRT (monospace, phosphor glow, scanlines, digital-rain canvas). Applied FOUC-free via a server-rendered `play/[code]/layout.tsx` wrapper that sets `data-theme` (the global header stays default). New themes = a `[data-theme="x"]` block in `globals.css` + the settings select.
 - **Game intro details.** Settings now has a **cover image** (`games.image_path`, `setGameImage` upload/replace/remove, stored under `game-media/...`) and an optional **location** (`games.location` text), plus **char limits/counters** on name (60) and description (200) — migration `…014`. Cover + location show to players on the `/play/[code]` join/intro screen. (Game-level password + search-visibility were intentionally skipped — team passwords already gate, and there's no public discovery.)
-- **Playwright E2E suite** (`e2e/`, 16 tests) — see §14.
+- **Playwright E2E suite** (`e2e/`) — see §14.
 
 ---
 
@@ -51,6 +68,7 @@ Plus auth surfaces (`/login`, `/signup`) and a guest path (anonymous Supabase au
 | Realtime | **Supabase Realtime** (`postgres_changes`) | Live leaderboard, live notifications |
 | File storage | **Supabase Storage** | Private `submissions` bucket; signed URLs (1h TTL) for all reads |
 | Drag-and-drop | **@dnd-kit/sortable** | For mission reorder |
+| ZIP export | **archiver** (`store` mode, streamed) | Bulk media download (`/export?type=media`) — per-team folders |
 | Mission unlock model | **DNF (disjunctive normal form)** in `unlock_groups jsonb` + optional `unlock_after timestamptz` | Stored as `string[][]`; any group satisfies. Time gate independent of groups. |
 | Notifications | **In-app realtime** via DB triggers + `notifications` table + `<NotificationBell>` | Includes **GM announcements** (broadcast to all teams) + a per-game player history page. Web push still not wired — see §10 |
 | Styling | **Token-based theme** (CSS vars + `@theme inline` + `@layer components`) | "Editorial Modern" default; light/dark via `prefers-color-scheme`. See §5.8 |
@@ -116,7 +134,10 @@ Escape Room Mission Webbased/         ← parent folder (just contains the repo)
     │   │   │       ├── page.tsx                  # Setup tab (AddTeamForm + batch link)
     │   │   │       ├── review/page.tsx           # Review tab — By Mission / By Status
     │   │   │       ├── review/m/[missionId]/page.tsx  # per-mission comparison + judging
-    │   │   │       ├── leaderboard/page.tsx      # Leaderboard tab
+    │   │   │       ├── leaderboard/page.tsx      # Leaderboard tab (+ CSV export link)
+    │   │   │       ├── progress/page.tsx         # Progress tab — per-team missions×teams grid
+    │   │   │       ├── export/route.ts           # GET CSV export (submissions | leaderboard)
+    │   │   │       ├── settings/page.tsx         # Settings tab (lifecycle, theme, intro)
     │   │   │       └── missions/
     │   │   │           ├── new/page.tsx
     │   │   │           ├── batch/page.tsx        # batch image → missions upload
@@ -148,6 +169,7 @@ Escape Room Mission Webbased/         ← parent folder (just contains the repo)
     │   │   ├── Countdown.tsx                     # live timer for deadlines
     │   │   └── Leaderboard.tsx                   # live aggregate-score table
     │   ├── lib/
+    │   │   ├── gm-tabs.ts                        # shared GM tab set (Setup/Review/Leaderboard/Progress/Settings)
     │   │   ├── auth-actions.ts                   # login / signup / joinGame / logout (useActionState)
     │   │   ├── gm-actions.ts                     # all GM mutations incl. createMissionsBatch, broadcastAnnouncement
     │   │   ├── player-actions.ts                 # joinTeam / submit*
@@ -197,7 +219,7 @@ Anonymous Supabase auth is enabled in `config.toml`. Guests are real `auth.users
 `reference_image_path` (single image, stored in the `submissions` bucket under `mission-media/...`) and `reference_links` (`jsonb` array of `{label, url}`, capped at 10, http/https only). Both show up on the player submit page and in the GM's `<MissionInspector>` popup.
 
 ### 5.7 Server actions own all writes
-No REST/route handlers for mutations. Every change happens through a server action in `src/lib/*-actions.ts`. Two patterns coexist: simple/always-succeeding actions redirect after revalidating (`action={someAction}`); fallible forms use the `useActionState` pattern below.
+No REST/route handlers for mutations. Every change happens through a server action in `src/lib/*-actions.ts`. Two patterns coexist: simple/always-succeeding actions redirect after revalidating (`action={someAction}`); fallible forms use the `useActionState` pattern below. **The one route handler is `games/[id]/export/route.ts`** — a GET-only file download (CSV), which a server action can't do (it needs to return a `Response`/stream). It's still owner-checked and read-only, so the "actions own all writes" rule holds.
 
 ### 5.8 Theme tokens (Editorial Modern)
 `globals.css` defines all colors/shadows/radii as CSS variables under `:root` (light) + a `prefers-color-scheme: dark` block, exposed as Tailwind utilities via `@theme inline` (e.g. `bg-surface`, `text-muted`, `border-default`, `text-accent`, `pill-success`). Reusable component classes live in `@layer components` (`.btn{,-primary,-secondary,-ghost,-danger}`, `.input/.textarea/.select`, `.card{,-compact,-interactive}`, `.pill{,-success,...}`, `.banner{,-error,...}`, `.text-gradient`, `.accent-rule`). **Never hardcode colors in components** — use the token utilities or these classes. A new theme = override the vars under `[data-theme="name"]` and set the attribute on a wrapper/element; no component changes. **Live example:** the `matrix` theme (`[data-theme="matrix"]` in `globals.css`) is applied per-game by `play/[code]/layout.tsx` (reads `games.theme`, wraps the player surface in `<div data-theme>` + a `<MatrixRain>` canvas). GM picks it in settings.
@@ -258,6 +280,7 @@ Forms that can fail validation/server checks must **not** `redirect("?error=…"
 | `20260506000012_game_auto_start.sql` | `refresh_game_status(game_id) returns text` SECURITY DEFINER — lazily flips a scheduled (draft + due `starts_at`) game to `active` on read; returns the current status. |
 | `20260506000013_game_theme.sql` | `games.theme` column (`'default'`/`'matrix'`) — the per-game player theme. |
 | `20260506000014_game_intro.sql` | `games.image_path` (cover image) + `games.location` (free text) for the player intro screen. |
+| `20260506000015_game_theme_treasure.sql` | Widens the `games.theme` check constraint to allow `'treasure'` (pirate/beach player theme), alongside `'default'` and `'matrix'`. |
 
 ---
 
@@ -284,7 +307,7 @@ Auth · games · teams · text+photo missions · linear prerequisites · player 
 | Item | Status |
 |---|---|
 | Live realtime leaderboard | ✅ |
-| **CSV export** | ❌ |
+| **CSV export** | ✅ (submissions + leaderboard, route handler) |
 | **Game cloning** | ❌ |
 | **PWA polish** (manifest + service worker + install prompt) | ❌ |
 | **i18n** (EN + BM) | ❌ |
@@ -299,8 +322,8 @@ Mission **edit** page · Mission **drag-and-drop reorder** · Guest joins + gues
 - Team captain role + shareable team-invite links
 - Team emblem/avatar (only color today)
 - Per-team submission feed for the team to see their own history
-- Per-team progress map view for the GM (locked/unlocked/completed grid)
-- Submission filter: **by mission ✅** (review gallery + per-mission page); **by team ❌**
+- Per-team progress map view for the GM (locked/unlocked/completed grid) **✅** (`/games/[id]/progress`)
+- Submission filter: **by mission ✅** (review gallery + per-mission page); **by team ✅** (team-pill filter on the By Status queue)
 
 ### §6 non-functional / production
 - **Cloudflare R2** for media (currently Supabase Storage — fine for dev)
@@ -340,15 +363,13 @@ Each commit is a self-contained change with a detailed message — `git show <sh
 
 ## 10. Suggested next steps (pick one)
 
-Currently in progress: **GM / management features** (working through this cluster).
-
-In rough order of impact-per-effort:
+The **GM / management cluster is done** (2026-05-24): progress map, CSV export, and submission-filter-by-team all shipped (§0). Remaining, in rough order of impact-per-effort:
 
 1. ~~**Game settings UI** — name/description/schedule + status lifecycle~~ ✅ **done** (2026-05-23). Remaining sub-item: **team-size / max-teams / invite-only** caps (needs new `games` columns + enforcement in `joinTeam`/`createTeam`).
-2. **Per-team progress map** for GM live dashboard *(small, high event-time value)* — grid of teams × missions with locked/unlocked/completed/failed cells.
-3. **CSV export** of leaderboard + submissions *(small, high practical value)* — server action returns a CSV `Response`. The "Download" button from the Goosechase reference belongs on the Review page.
+2. ~~**Per-team progress map**~~ ✅ **done** (2026-05-24) — `/games/[id]/progress`.
+3. ~~**CSV export** of leaderboard + submissions~~ ✅ **done** (2026-05-24) — GET route handler + download links.
 4. **Game cloning** *(very small)* — duplicate missions on insert; no team assignment carryover.
-5. **Submission filter by team** *(small)* — by-mission is done; add a team filter to the review surface.
+5. ~~**Submission filter by team**~~ ✅ **done** (2026-05-24) — team-pill filter on the By Status queue.
 6. **GPS check-in submissions** *(completes PRD §5.3 submission types)* — reuse auto-validation pattern; Haversine in SQL is ~10 lines. UI is a "Use my location" button + lat/lng inputs.
 7. **Direct-to-storage for player submissions** *(unlocks Vercel deployment)* — apply the §5.10 batch pattern to `submit*` and the single-mission reference upload.
 8. **`pg_cron` worker** *(needed before push for time-gate / expiry notifications to fire when no one's on the page)* — every 30s call `refresh_game_state` for every active game.
@@ -451,8 +472,11 @@ npm run test:e2e:report    # open the HTML report
 | `review-by-mission.spec.ts` | judged mission → player submits → GM reviews via gallery → per-mission page → approve (stays on page) |
 | `batch-upload.spec.ts` | multi-select images (additive) → filename→title derivation → create → land on Setup |
 | `game-lifecycle.spec.ts` | (1) pause → resume gating; (2) schedule "in 2h" → player sees countdown; (3) schedule at an absolute time |
-| `game-theme.spec.ts` | GM sets the Matrix theme → joining player sees `data-theme="matrix"` + rain canvas |
+| `game-theme.spec.ts` | GM sets the Matrix theme → player sees `data-theme="matrix"` + rain canvas; GM sets the Treasure Hunt theme → player sees `data-theme="treasure"` + `.treasure-backdrop` waves |
 | `game-intro.spec.ts` | GM sets cover image + location → joining player sees them on the intro screen |
+| `gm-management.spec.ts` | player submits → GM progress map shows pending/unlocked cells; review team filter empties for Team 2 / shows Team 1; submissions + leaderboard CSV export return `text/csv` |
+| `media-export.spec.ts` | player submits a photo → GM's `type=media` download returns a ZIP (PK signature) containing `Team 1/Team 1 - Beach Selfie.png`; Review shows the gated "Download media" link |
+| `theme-toggle.spec.ts` | with the OS emulated to dark, the app still defaults to light; the header toggle cycles light → dark → system → light and the choice persists across reload |
 
 Notes:
 - `workers: 1`, `retries: 1` (absorbs Turbopack cold-compile flakes), failure artifacts (screenshot/video/trace) under `test-results/` (gitignored).

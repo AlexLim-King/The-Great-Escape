@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import TabNav from "@/components/TabNav";
+import { gmTabs } from "@/lib/gm-tabs";
 import MissionRequirements, {
   type RequirementsMission,
 } from "@/components/MissionRequirements";
@@ -174,20 +175,7 @@ export default async function MissionReviewPage(
         </p>
       </header>
 
-      <TabNav
-        current="Review"
-        tabs={[
-          { label: "Setup", href: `/games/${game.id}` },
-          {
-            label: "Review",
-            href: `/games/${game.id}/review`,
-            badge: counts.pending,
-            badgeTone: "warn",
-          },
-          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
-          { label: "Settings", href: `/games/${game.id}/settings` },
-        ]}
-      />
+      <TabNav current="Review" tabs={gmTabs(game.id, counts.pending)} />
 
       {/* Requirements pinned above all teams' submissions */}
       <MissionRequirements

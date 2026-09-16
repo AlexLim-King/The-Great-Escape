@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import TabNav from "@/components/TabNav";
+import { gmTabs } from "@/lib/gm-tabs";
 import GameSettingsForm from "@/components/GameSettingsForm";
 import GameStartCountdown from "@/components/GameStartCountdown";
 import StartScheduler from "@/components/StartScheduler";
@@ -82,15 +83,7 @@ export default async function GameSettingsPage(
         </h1>
       </header>
 
-      <TabNav
-        current="Settings"
-        tabs={[
-          { label: "Setup", href: `/games/${game.id}` },
-          { label: "Review", href: `/games/${game.id}/review` },
-          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
-          { label: "Settings", href: `/games/${game.id}/settings` },
-        ]}
-      />
+      <TabNav current="Settings" tabs={gmTabs(game.id)} />
 
       {error && <p className="banner banner-error">{error}</p>}
 
@@ -193,10 +186,10 @@ export default async function GameSettingsPage(
             <img
               src={coverUrl}
               alt="Game cover"
-              className="w-40 h-28 object-cover rounded-lg border border-default flex-none"
+              className="w-40 aspect-video object-cover rounded-lg border border-default flex-none"
             />
           ) : (
-            <div className="w-40 h-28 rounded-lg border border-dashed border-strong bg-surface-muted flex items-center justify-center text-2xl text-subtle flex-none">
+            <div className="w-40 aspect-video rounded-lg border border-dashed border-strong bg-surface-muted flex items-center justify-center text-2xl text-subtle flex-none">
               🖼
             </div>
           )}
@@ -227,8 +220,11 @@ export default async function GameSettingsPage(
               </form>
             )}
             <p className="text-xs text-muted max-w-xs">
-              Shown to players on the join screen — helps them recognise the
-              game. JPG or PNG, up to 10 MB.
+              Shown full-width to players on the join screen — helps them
+              recognise the game. For sharp, fast-loading results on mobile,
+              use a landscape <strong>16:9</strong> image around{" "}
+              <strong>1200&nbsp;×&nbsp;675&nbsp;px</strong>. JPG or PNG, up to
+              10 MB.
             </p>
           </div>
         </div>

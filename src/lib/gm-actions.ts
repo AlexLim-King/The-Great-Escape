@@ -193,7 +193,7 @@ export type GameSettingsState = {
   };
 };
 
-const GAME_THEMES = ["default", "matrix"] as const;
+const GAME_THEMES = ["default", "matrix", "treasure"] as const;
 const NAME_MAX = 60;
 const DESCRIPTION_MAX = 200;
 const LOCATION_MAX = 120;

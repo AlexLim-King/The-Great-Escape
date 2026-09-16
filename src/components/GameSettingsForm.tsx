@@ -91,10 +91,12 @@ export default function GameSettingsForm({
         <select name="theme" defaultValue={v.theme} className="mt-1 select">
           <option value="default">Default (Editorial)</option>
           <option value="matrix">Matrix (green CLI / hacker)</option>
+          <option value="treasure">Treasure Hunt (pirate / beach)</option>
         </select>
         <span className="block text-xs text-muted mt-1">
-          Players see this theme when they join — green-on-black terminal vibe
-          with digital rain for Matrix.
+          Players see this theme when they join — e.g. a green-on-black
+          terminal with digital rain (Matrix), or warm parchment with gold
+          accents and drifting waves (Treasure Hunt).
         </span>
       </label>
 

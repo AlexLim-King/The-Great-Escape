@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth-actions";
 import NotificationBell from "@/components/NotificationBell";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function Header() {
   const supabase = await createClient();
@@ -37,6 +38,7 @@ export default async function Header() {
           <span>Escape Room</span>
         </Link>
         <nav className="flex items-center gap-3 text-sm">
+          <ThemeToggle />
           {user ? (
             <>
               {!user.is_anonymous && (

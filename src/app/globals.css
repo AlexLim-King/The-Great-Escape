@@ -15,6 +15,10 @@
    ============================================================================ */
 
 :root {
+  /* Light is the default scheme; dark is opt-in (see the
+     [data-color-scheme="dark"] block below). */
+  color-scheme: light;
+
   /* Surfaces — light mode */
   --color-bg:            #f7f7fb;
   --color-surface:       #ffffff;
@@ -76,8 +80,13 @@
   --gradient-brand: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark mode is opt-in via [data-color-scheme="dark"] on <html>, set before
+   paint by the inline script in layout.tsx and toggled by the header
+   ThemeToggle. Default is light; the "system" preference is resolved to
+   light/dark in JS, so no prefers-color-scheme media query is needed. */
+:root[data-color-scheme="dark"] {
+    color-scheme: dark;
+
     /* Surfaces — dark mode with subtle blue-purple undertone so it doesn't
        read as pure black-on-white. Surfaces are clearly lifted from bg. */
     --color-bg:            #0b0b14;
@@ -124,7 +133,6 @@
     --shadow:    0 4px 12px -2px rgb(0 0 0 / 0.50);
     --shadow-lg: 0 14px 28px -8px rgb(0 0 0 / 0.60);
     --shadow-accent: 0 8px 30px -10px color-mix(in oklab, var(--color-accent) 50%, transparent);
-  }
 }
 
 /* ----------------------------------------------------------------------------
@@ -189,6 +197,127 @@
     rgba(0, 0, 0, 0) 2px,
     rgba(0, 0, 0, 0.28) 3px
   );
+}
+
+/* ----------------------------------------------------------------------------
+   Theme: "treasure" — pirate treasure hunt / tropical beach. Sun-bleached
+   sand + aged-parchment surfaces, lagoon-teal and doubloon-gold accents,
+   sepia ink text, and an old-map serif face. Applied per-game via
+   data-theme="treasure" on the player-surface wrapper (see
+   play/[code]/layout.tsx), which also mounts <TreasureBackdrop/> for the
+   drifting waves + sun glow.
+   ---------------------------------------------------------------------------- */
+[data-theme="treasure"] {
+  --color-bg:            #f4e3c1;  /* sun-bleached sand */
+  --color-surface:       #fdf6e3;  /* aged parchment */
+  --color-surface-muted: #efdcb4;
+  --color-surface-hover: #e7cf9f;
+
+  --color-text:          #3b2a16;  /* sepia ink */
+  --color-text-muted:    #6f5733;
+  --color-text-subtle:   #927a52;
+
+  --color-border:        #d8bd87;
+  --color-border-strong: #c2a164;
+
+  --color-accent:        #0f766e;  /* lagoon teal */
+  --color-accent-hover:  #0b5d56;
+  --color-accent-fg:     #fdf6e3;
+  --color-accent-soft:   #cde9e4;
+  --color-accent-soft-fg:#0b4f49;
+  --color-accent-2:      #d9a521;  /* doubloon gold */
+
+  --color-success:       #2f7d32;
+  --color-success-soft:  #d7eccb;
+  --color-success-soft-fg:#22591f;
+
+  --color-warn:          #b3791b;
+  --color-warn-soft:     #f6e7c0;
+  --color-warn-soft-fg:  #7c5310;
+
+  --color-danger:        #b23a2e;  /* weathered red */
+  --color-danger-soft:   #f5d9d2;
+  --color-danger-soft-fg:#872a20;
+
+  --color-info:          #1f6f9c;  /* ocean blue */
+  --color-info-soft:     #d4e9f4;
+  --color-info-soft-fg:  #15506f;
+
+  --color-focus:         #d9a521;
+
+  /* Treasure gradient: lagoon → gold (sea meets bounty). */
+  --gradient-brand: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+
+  /* Old-map serif for the whole player surface. */
+  font-family: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype",
+    "Times New Roman", serif;
+}
+
+/* Warm sun-glow in the top corner + a faint sea tint at the bottom. Sits
+   above the backdrop waves (z-0) but below content (z-10); ignores input. */
+[data-theme="treasure"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(
+      55rem 55rem at 88% -12%,
+      rgba(255, 214, 120, 0.32),
+      transparent 60%
+    ),
+    radial-gradient(
+      80rem 50rem at 50% 122%,
+      rgba(15, 118, 110, 0.12),
+      transparent 60%
+    );
+}
+
+/* Drifting ocean waves backdrop for the treasure theme (see
+   TreasureBackdrop.tsx). Two stacked data-URI SVG wave bands scrolling
+   horizontally at different speeds. Pure CSS — no canvas. */
+.treasure-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.treasure-waves {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24vh;
+  min-height: 120px;
+  background-repeat: repeat-x;
+  background-position: 0 bottom;
+  background-size: 1200px 100%;
+  will-change: background-position;
+}
+.treasure-waves-back {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='1200'%20height='120'%20preserveAspectRatio='none'%20viewBox='0%200%201200%20120'%3E%3Cpath%20d='M0%2036%20C%20200%2072%20400%200%20600%2036%20C%20800%2072%201000%200%201200%2036%20L%201200%20120%20L%200%20120%20Z'%20fill='%230f766e'/%3E%3C/svg%3E");
+  opacity: 0.32;
+  animation: treasure-wave 19s linear infinite;
+}
+.treasure-waves-front {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='1200'%20height='120'%20preserveAspectRatio='none'%20viewBox='0%200%201200%20120'%3E%3Cpath%20d='M0%2050%20C%20220%2010%20420%2090%20600%2050%20C%20800%2010%20980%2090%201200%2050%20L%201200%20120%20L%200%20120%20Z'%20fill='%230b5d56'/%3E%3C/svg%3E");
+  opacity: 0.5;
+  animation: treasure-wave 12s linear infinite reverse;
+}
+@keyframes treasure-wave {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -1200px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .treasure-waves {
+    animation: none !important;
+  }
 }
 
 /* Expose tokens as Tailwind utilities. The `--color-*` keys here become

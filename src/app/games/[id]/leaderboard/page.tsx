@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Leaderboard from "@/components/Leaderboard";
 import TabNav from "@/components/TabNav";
+import { gmTabs } from "@/lib/gm-tabs";
 
 export default async function GMLeaderboardPage(
   props: PageProps<"/games/[id]/leaderboard">,
@@ -41,20 +42,17 @@ export default async function GMLeaderboardPage(
         </h1>
       </header>
 
-      <TabNav
-        current="Leaderboard"
-        tabs={[
-          { label: "Setup", href: `/games/${game.id}` },
-          {
-            label: "Review",
-            href: `/games/${game.id}/review`,
-            badge: pendingCount ?? 0,
-            badgeTone: "warn",
-          },
-          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
-          { label: "Settings", href: `/games/${game.id}/settings` },
-        ]}
-      />
+      <TabNav current="Leaderboard" tabs={gmTabs(game.id, pendingCount ?? 0)} />
+
+      <div className="flex justify-end">
+        <a
+          href={`/games/${game.id}/export?type=leaderboard`}
+          download
+          className="btn btn-secondary text-sm"
+        >
+          ↓ Export leaderboard CSV
+        </a>
+      </div>
 
       <Leaderboard gameId={game.id} />
     </main>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import TabNav from "@/components/TabNav";
+import { gmTabs } from "@/lib/gm-tabs";
 import MissionInspector, {
   type InspectorMission,
 } from "@/components/MissionInspector";
@@ -43,6 +44,10 @@ export default async function ReviewPage(
     STATUS_TABS.some((t) => t.value === tabRaw) ? tabRaw : "pending"
   ) as StatusTab;
 
+  // Optional team filter for the status queue (validated against the
+  // game's teams below, once we've loaded them).
+  const teamRaw = one(sp.team) ?? null;
+
   // Flash-message inputs from the broadcastAnnouncement redirect.
   const announceSentStr = one(sp.announce_sent);
   const announceSent =
@@ -80,12 +85,23 @@ export default async function ReviewPage(
     .order("created_at", { ascending: false });
 
   const subs = allSubmissions ?? [];
+  // Global counts drive the TabNav / view-toggle badges (total pending
+  // across every team).
   const counts = {
     pending: subs.filter((s) => s.status === "pending").length,
     approved: subs.filter((s) => s.status === "approved").length,
     rejected: subs.filter((s) => s.status === "rejected").length,
     all: subs.length,
   };
+  // Photo/video submissions with a stored file — gates the "download all
+  // media" link (the bulk ZIP export of captured moments).
+  const mediaCount = subs.filter((s) => {
+    const m = one(s.missions);
+    return (
+      s.media_path &&
+      (m?.submission_type === "photo" || m?.submission_type === "video")
+    );
+  }).length;
 
   // Full mission list (ordered) for the gallery + title lookups.
   const { data: missionsFull } = await supabase
@@ -101,12 +117,28 @@ export default async function ReviewPage(
     missions.map((m) => [m.id, m.title]),
   );
 
-  // Recipient count + recent announcements (shared header).
+  // Recipient count + recent announcements (shared header) + the team
+  // filter options for the status queue.
   const { data: gameTeams } = await supabase
     .from("teams")
-    .select("id")
-    .eq("game_id", id);
+    .select("id, name, color")
+    .eq("game_id", id)
+    .order("created_at", { ascending: true });
   const gameTeamIds = (gameTeams ?? []).map((t) => t.id);
+  const teamFilter =
+    teamRaw && gameTeamIds.includes(teamRaw) ? teamRaw : null;
+
+  // Status-queue counts, scoped to the team filter so the sub-tab numbers
+  // match what's actually listed.
+  const teamScopedSubs = teamFilter
+    ? subs.filter((s) => s.team_id === teamFilter)
+    : subs;
+  const statusCounts = {
+    pending: teamScopedSubs.filter((s) => s.status === "pending").length,
+    approved: teamScopedSubs.filter((s) => s.status === "approved").length,
+    rejected: teamScopedSubs.filter((s) => s.status === "rejected").length,
+    all: teamScopedSubs.length,
+  };
   let recipientCount = 0;
   if (gameTeamIds.length > 0) {
     const { data: members } = await supabase
@@ -193,9 +225,11 @@ export default async function ReviewPage(
       };
     });
   } else {
-    // Status queue (existing behavior): filter by tab, sign media, names.
+    // Status queue: filter by team (if set) + tab, then sign media, names.
     const visible =
-      tab === "all" ? subs : subs.filter((s) => s.status === tab);
+      tab === "all"
+        ? teamScopedSubs
+        : teamScopedSubs.filter((s) => s.status === tab);
     if (tab === "pending") {
       visible.sort(
         (a, b) =>
@@ -264,7 +298,8 @@ export default async function ReviewPage(
   // Map status rows back to their mission spec (for the inspector header).
   const missionById = new Map(subs.map((s) => [s.mission_id, one(s.missions)!]));
 
-  const statusReturnPath = `/games/${game.id}/review?view=status&tab=${tab}`;
+  const teamQuery = teamFilter ? `&team=${teamFilter}` : "";
+  const statusReturnPath = `/games/${game.id}/review?view=status&tab=${tab}${teamQuery}`;
 
   return (
     <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 space-y-8">
@@ -278,20 +313,7 @@ export default async function ReviewPage(
         </h1>
       </header>
 
-      <TabNav
-        current="Review"
-        tabs={[
-          { label: "Setup", href: `/games/${game.id}` },
-          {
-            label: "Review",
-            href: `/games/${game.id}/review`,
-            badge: counts.pending,
-            badgeTone: "warn",
-          },
-          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
-          { label: "Settings", href: `/games/${game.id}/settings` },
-        ]}
-      />
+      <TabNav current="Review" tabs={gmTabs(game.id, counts.pending)} />
 
       {/* Announcements: composer + recent history */}
       <section className="space-y-3">
@@ -344,9 +366,30 @@ export default async function ReviewPage(
           <h2 className="text-xl font-semibold tracking-tight">
             Submissions
           </h2>
-          <p className="text-sm text-muted">
-            {missions.length} missions · {counts.all} submissions
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted">
+              {missions.length} missions · {counts.all} submissions
+            </p>
+            {counts.all > 0 && (
+              <a
+                href={`/games/${game.id}/export?type=submissions`}
+                download
+                className="btn btn-secondary text-sm"
+              >
+                ↓ Export CSV
+              </a>
+            )}
+            {mediaCount > 0 && (
+              <a
+                href={`/games/${game.id}/export?type=media`}
+                download
+                className="btn btn-secondary text-sm"
+                title="Download every photo & video, in folders per team"
+              >
+                ↓ Download media ({mediaCount})
+              </a>
+            )}
+          </div>
         </div>
 
         {/* View toggle: By Mission (gallery) | By Status (queue) */}
@@ -430,13 +473,44 @@ export default async function ReviewPage(
         {/* ── By Status: queue ─────────────────────────────────────────── */}
         {view === "status" && (
           <>
+            {/* Team filter */}
+            {(gameTeams ?? []).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                <span className="text-xs text-muted mr-1">Team:</span>
+                <Link
+                  href={`/games/${game.id}/review?view=status&tab=${tab}`}
+                  className={`pill ${
+                    teamFilter === null ? "pill-accent" : "pill-neutral"
+                  }`}
+                >
+                  All teams
+                </Link>
+                {(gameTeams ?? []).map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/games/${game.id}/review?view=status&tab=${tab}&team=${t.id}`}
+                    className={`pill inline-flex items-center gap-1.5 ${
+                      teamFilter === t.id ? "pill-accent" : "pill-neutral"
+                    }`}
+                  >
+                    <span
+                      className="inline-block w-2 h-2 rounded-full"
+                      style={{ background: t.color }}
+                      aria-hidden
+                    />
+                    {t.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+
             <div className="flex gap-1 mb-4 border-b border-default -mx-1 overflow-x-auto">
               {STATUS_TABS.map((t) => {
                 const isActive = tab === t.value;
                 return (
                   <Link
                     key={t.value}
-                    href={`/games/${game.id}/review?view=status&tab=${t.value}`}
+                    href={`/games/${game.id}/review?view=status&tab=${t.value}${teamQuery}`}
                     className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap transition-colors ${
                       isActive
                         ? "border-accent text-text font-medium"
@@ -447,7 +521,7 @@ export default async function ReviewPage(
                     <span
                       className={`text-xs ${isActive ? "" : "text-subtle"}`}
                     >
-                      ({counts[t.value]})
+                      ({statusCounts[t.value]})
                     </span>
                   </Link>
                 );
@@ -456,11 +530,13 @@ export default async function ReviewPage(
 
             {statusRows.length === 0 ? (
               <p className="text-sm text-muted">
-                {tab === "pending"
-                  ? "Inbox zero — no submissions awaiting review."
-                  : tab === "all"
-                    ? "No submissions yet."
-                    : `No ${tab} submissions.`}
+                {teamFilter
+                  ? `No ${tab === "all" ? "" : tab + " "}submissions from this team.`
+                  : tab === "pending"
+                    ? "Inbox zero — no submissions awaiting review."
+                    : tab === "all"
+                      ? "No submissions yet."
+                      : `No ${tab} submissions.`}
               </p>
             ) : (
               <ul className="space-y-3">

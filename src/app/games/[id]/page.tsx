@@ -9,6 +9,7 @@ import {
   setTeamPassword,
 } from "@/lib/gm-actions";
 import TabNav from "@/components/TabNav";
+import { gmTabs } from "@/lib/gm-tabs";
 import AddTeamForm from "@/components/AddTeamForm";
 import SortableMissionList, {
   type SortableMission,
@@ -139,20 +140,7 @@ export default async function GameDashboard(props: PageProps<"/games/[id]">) {
         {error && <p className="banner banner-error mt-3">{error}</p>}
       </header>
 
-      <TabNav
-        current="Setup"
-        tabs={[
-          { label: "Setup", href: `/games/${game.id}` },
-          {
-            label: "Review",
-            href: `/games/${game.id}/review`,
-            badge: pendingCount ?? 0,
-            badgeTone: "warn",
-          },
-          { label: "Leaderboard", href: `/games/${game.id}/leaderboard` },
-          { label: "Settings", href: `/games/${game.id}/settings` },
-        ]}
-      />
+      <TabNav current="Setup" tabs={gmTabs(game.id, pendingCount ?? 0)} />
 
       {/* Teams */}
       <section>

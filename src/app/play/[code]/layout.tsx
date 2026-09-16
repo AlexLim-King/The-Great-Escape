@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import MatrixRain from "@/components/MatrixRain";
+import TreasureBackdrop from "@/components/TreasureBackdrop";
+
+// Themes that get a custom data-theme wrapper + (optionally) a decorative
+// backdrop. Anything else renders the default (Editorial) surface.
+const THEMED = ["matrix", "treasure"] as const;
+type Theme = (typeof THEMED)[number];
 
 /**
  * Applies the game's chosen theme to the whole player surface
@@ -19,7 +25,9 @@ export default async function PlayGameLayout(
     .eq("join_code", code.toUpperCase())
     .maybeSingle();
 
-  const theme = game?.theme === "matrix" ? "matrix" : null;
+  const theme = THEMED.includes(game?.theme as Theme)
+    ? (game!.theme as Theme)
+    : null;
 
   if (!theme) return <>{props.children}</>;
 
@@ -28,7 +36,8 @@ export default async function PlayGameLayout(
       data-theme={theme}
       className="relative flex-1 flex flex-col bg-bg text-text"
     >
-      <MatrixRain />
+      {theme === "matrix" && <MatrixRain />}
+      {theme === "treasure" && <TreasureBackdrop />}
       <div className="relative z-10 flex-1 flex flex-col">{props.children}</div>
     </div>
   );
