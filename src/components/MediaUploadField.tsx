@@ -5,10 +5,13 @@ import { useEffect, useId, useRef, useState } from "react";
 export default function MediaUploadField({
   kind,
   name = "media",
+  onFileSelected,
 }: {
   kind: "photo" | "video";
   /** Form field name — must match what the server action reads. */
   name?: string;
+  /** Notified whenever the picked file changes (for client-driven upload). */
+  onFileSelected?: (file: File | null) => void;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -27,6 +30,7 @@ export default function MediaUploadField({
 
   function clearFile() {
     setFile(null);
+    onFileSelected?.(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -48,7 +52,11 @@ export default function MediaUploadField({
         accept={kind === "photo" ? "image/*" : "video/*"}
         capture="environment"
         required
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          setFile(f);
+          onFileSelected?.(f);
+        }}
         className="sr-only"
       />
 

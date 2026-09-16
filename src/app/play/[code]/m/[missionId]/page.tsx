@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { submitTextAnswer, submitMedia } from "@/lib/player-actions";
+import { submitTextAnswer } from "@/lib/player-actions";
 import Countdown from "@/components/Countdown";
-import MediaUploadField from "@/components/MediaUploadField";
+import MediaSubmitForm from "@/components/MediaSubmitForm";
 
 export default async function SubmitMissionPage(
   props: PageProps<"/play/[code]/m/[missionId]">,
@@ -200,28 +200,13 @@ export default async function SubmitMissionPage(
           </button>
         </form>
       ) : isMedia ? (
-        <form action={submitMedia} className="mt-6 space-y-4">
-          <input type="hidden" name="mission_id" value={mission.id} />
-          <input type="hidden" name="team_id" value={myTeamId} />
-          <input type="hidden" name="join_code" value={code} />
-          <input
-            type="hidden"
-            name="media_kind"
-            value={isPhoto ? "photo" : "video"}
-          />
-
-          <MediaUploadField kind={isPhoto ? "photo" : "video"} />
-
-          {isVideo && (
-            <p className="text-xs text-subtle">
-              Keep it under ~60 seconds and 100 MB.
-            </p>
-          )}
-
-          <button type="submit" className="btn btn-primary btn-lg w-full sm:w-auto">
-            {isPhoto ? "Submit photo" : "Submit video"}
-          </button>
-        </form>
+        <MediaSubmitForm
+          kind={isPhoto ? "photo" : "video"}
+          missionId={mission.id}
+          teamId={myTeamId}
+          joinCode={code}
+          gameId={game.id}
+        />
       ) : null}
     </main>
   );

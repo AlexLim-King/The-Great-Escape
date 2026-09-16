@@ -60,12 +60,17 @@ export async function leaveTeam(formData: FormData) {
   redirect(`/play/${join_code}`);
 }
 
-async function ensureMissionSubmittable(
+/**
+ * Returns an error message if the mission can't be submitted right now
+ * (game not active, mission locked/expired), else null. Also performs the
+ * lazy status/state refresh side effects. Callers choose whether to
+ * redirect (form actions) or return the message (client-invoked actions).
+ */
+async function missionSubmittableError(
   supabase: Awaited<ReturnType<typeof createClient>>,
   team_id: string,
   mission_id: string,
-  join_code: string,
-) {
+): Promise<string | null> {
   // Submissions are only open while the game is 'active'. First let any
   // scheduled start that's now due flip the game live, then gate.
   const { data: teamRow } = await supabase
@@ -78,13 +83,11 @@ async function ensureMissionSubmittable(
       p_game_id: teamRow.game_id,
     });
     if (status && status !== "active") {
-      const reason =
-        status === "paused"
-          ? "The game is paused — submissions are closed."
-          : status === "ended"
-            ? "The game has ended — submissions are closed."
-            : "The game hasn't started yet.";
-      redirect(`/play/${join_code}?error=${encodeURIComponent(reason)}`);
+      return status === "paused"
+        ? "The game is paused — submissions are closed."
+        : status === "ended"
+          ? "The game has ended — submissions are closed."
+          : "The game hasn't started yet.";
     }
   }
 
@@ -102,12 +105,11 @@ async function ensureMissionSubmittable(
     .maybeSingle();
 
   if (!state || state.state !== "unlocked") {
-    const reason =
-      state?.state === "failed_expired"
-        ? "That mission's deadline has passed."
-        : "Mission is not available.";
-    redirect(`/play/${join_code}?error=${encodeURIComponent(reason)}`);
+    return state?.state === "failed_expired"
+      ? "That mission's deadline has passed."
+      : "Mission is not available.";
   }
+  return null;
 }
 
 export async function submitTextAnswer(formData: FormData) {
@@ -124,7 +126,10 @@ export async function submitTextAnswer(formData: FormData) {
     );
   }
 
-  await ensureMissionSubmittable(supabase, team_id, mission_id, join_code);
+  const gateErr = await missionSubmittableError(supabase, team_id, mission_id);
+  if (gateErr) {
+    redirect(`/play/${join_code}?error=${encodeURIComponent(gateErr)}`);
+  }
 
   const { error } = await supabase.from("submissions").insert({
     mission_id,
@@ -143,64 +148,55 @@ export async function submitTextAnswer(formData: FormData) {
   redirect(`/play/${join_code}`);
 }
 
-export async function submitMedia(formData: FormData) {
+/**
+ * Record a player photo/video submission. The browser uploads the file
+ * straight to Supabase Storage (bypassing the server-action body limit —
+ * ~4.5 MB on Vercel — so real phone media goes through) and calls this with
+ * just the resulting storage path. We re-check submittability, verify the
+ * path lives in this team+mission's namespace, then insert the row.
+ *
+ * Client-invoked (like createMissionsBatch), so it returns an error string
+ * instead of redirecting — the caller can show it inline without discarding
+ * the already-uploaded file.
+ */
+export async function submitMediaPath(args: {
+  mission_id: string;
+  team_id: string;
+  join_code: string;
+  media_path: string;
+}): Promise<{ ok: true } | { error: string }> {
   const { supabase, user } = await requireUser();
+  const { mission_id, team_id, join_code, media_path } = args;
 
-  const mission_id = formData.get("mission_id") as string;
-  const team_id = formData.get("team_id") as string;
-  const join_code = formData.get("join_code") as string;
-  const media_kind =
-    (formData.get("media_kind") as "photo" | "video") || "photo";
-  const file = formData.get("media") as File | null;
-
-  if (!file || file.size === 0) {
-    redirect(
-      `/play/${join_code}/m/${mission_id}?error=Please+pick+a+${media_kind === "video" ? "video" : "photo"}`,
-    );
+  if (!media_path || media_path.includes("..")) {
+    return { error: "Invalid upload path." };
   }
 
-  await ensureMissionSubmittable(supabase, team_id, mission_id, join_code);
+  const gateErr = await missionSubmittableError(supabase, team_id, mission_id);
+  if (gateErr) return { error: gateErr };
 
-  // Look up game_id for path namespacing
+  // Storage RLS is bucket-wide, so verify the reported path is actually in
+  // this team+mission's namespace before trusting it into a row.
   const { data: team } = await supabase
     .from("teams")
     .select("game_id")
     .eq("id", team_id)
     .single();
-  if (!team) {
-    redirect(`/play/${join_code}/m/${mission_id}?error=Team+not+found`);
-  }
+  if (!team) return { error: "Team not found." };
 
-  const fallbackExt = media_kind === "video" ? "mp4" : "jpg";
-  const fallbackMime = media_kind === "video" ? "video/mp4" : "image/jpeg";
-  const ext = (file.name.split(".").pop() || fallbackExt)
-    .toLowerCase()
-    .slice(0, 4);
-  const path = `${team.game_id}/${team_id}/${mission_id}/${Date.now()}-${user.id.slice(0, 8)}.${ext}`;
-
-  const { error: upErr } = await supabase.storage
-    .from("submissions")
-    .upload(path, file, { contentType: file.type || fallbackMime });
-
-  if (upErr) {
-    redirect(
-      `/play/${join_code}/m/${mission_id}?error=${encodeURIComponent("Upload failed: " + upErr.message)}`,
-    );
+  const prefix = `${team.game_id}/${team_id}/${mission_id}/`;
+  if (!media_path.startsWith(prefix)) {
+    return { error: "Upload path didn't match this mission." };
   }
 
   const { error } = await supabase.from("submissions").insert({
     mission_id,
     team_id,
     submitted_by: user.id,
-    media_path: path,
+    media_path,
   });
-
-  if (error) {
-    redirect(
-      `/play/${join_code}/m/${mission_id}?error=${encodeURIComponent(error.message)}`,
-    );
-  }
+  if (error) return { error: error.message };
 
   revalidatePath(`/play/${join_code}`);
-  redirect(`/play/${join_code}`);
+  return { ok: true };
 }
